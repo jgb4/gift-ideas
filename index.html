@@ -160,6 +160,10 @@
 <dialog id="edit">
   <form method="dialog" id="editForm">
     <strong>Edit gift</strong>
+    <label>What you asked for (a link or a description). Change it if you like, then look it up again</label>
+    <textarea name="input" rows="2"></textarea>
+    <div class="row" style="justify-content:flex-start;margin-top:8px"><button type="button" class="primary" id="rerunBtn">↻ Look it up again</button></div>
+    <hr style="border:0;border-top:1px solid var(--line);margin:16px 0 4px">
     <label>Name</label><input name="name" />
     <label>Short description</label><textarea name="description" rows="3"></textarea>
     <label>Estimated price</label><input name="price" placeholder="$49" />
@@ -415,7 +419,6 @@ function giftRow(i) {
           <button class="icon ${i.purchased ? "on" : ""}" data-buy="${i.id}">${i.purchased ? "✓ Bought" : "Mark bought"}</button>
           <button class="icon" data-stores="${i.id}" title="Search the web for the best stores and current prices">🔍 Stores</button>
           <button class="icon" data-edit="${i.id}">Edit</button>
-          <button class="icon" data-retry="${i.id}" title="Look it up again">↻</button>
           <button class="icon" data-del="${i.id}" title="Remove">✕</button>
         </div>
       </div>
@@ -436,7 +439,6 @@ function wireProfile(p, cat) {
     p.items = p.items.filter((i) => i.id !== b.dataset.del); save(); render();
   }));
   document.querySelectorAll("[data-buy]").forEach((b) => (b.onclick = () => { const i = item(b.dataset.buy); i.purchased = !i.purchased; save(); render(); }));
-  document.querySelectorAll("[data-retry]").forEach((b) => (b.onclick = () => { const i = item(b.dataset.retry); i.status = "processing"; i.error = null; save(); render(); runQueue(); }));
   document.querySelectorAll("[data-stores]").forEach((b) => (b.onclick = () => { const i = item(b.dataset.stores); i.status = "processing"; i.mode = "stores"; i.error = null; save(); render(); runQueue(); }));
   document.querySelectorAll("[data-edit]").forEach((b) => (b.onclick = () => openEdit(item(b.dataset.edit))));
   const del = $("#delProf");
@@ -450,7 +452,17 @@ function openEdit(i) {
   const f = $("#editForm"), d = $("#edit");
   f.name.value = i.name || ""; f.description.value = i.description || ""; f.price.value = i.price || ""; f.image.value = i.image || "";
   f.links.value = (i.links || []).map((l) => `${l.store} | ${l.url}`).join("\n");
+  f.input.value = i.sourceUrl || i.query || i.name || "";
+  d.returnValue = "";
+  $("#rerunBtn").onclick = () => d.close("rerun");
   d.onclose = () => {
+    if (d.returnValue === "rerun") {
+      const text = f.input.value.trim(); if (!text) return;
+      const url = asUrl(text);
+      Object.assign(i, { sourceUrl: url, query: url ? null : text.slice(0, 500), status: "processing", mode: null, error: null });
+      save(); render(); runQueue();
+      return;
+    }
     if (d.returnValue !== "save") return;
     const links = f.links.value.split("\n").map((line) => { const [a, b] = line.split("|").map((s) => s.trim()); return b ? { store: a, url: b } : a ? { store: host(a), url: a } : null; }).filter((l) => l && /^https?:\/\//.test(l.url));
     Object.assign(i, { name: f.name.value, description: f.description.value, price: f.price.value, image: f.image.value || null, links, error: null });

@@ -300,7 +300,7 @@ async function synthesize(input, forWhom, mode, env) {
   } else if (mode === "stores") note = "Live store search isn't available right now (billing off or today's search limit reached).";
   if (!ai) {
     try { ai = await gemini(env, prompt(input, url, page, forWhom, false), false); }
-    catch (e) { console.log("gemini failed", e.status, e.message); error = e.status === 402 ? "Gemini needs prepaid credit: add some in AI Studio (Billing), then press ↻." : e.status === 429 ? "Gemini's daily limit is used up. Try ↻ tomorrow." : `AI couldn't finish (${e.message}). Try ↻ or edit by hand.`; }
+    catch (e) { console.log("gemini failed", e.status, e.message); error = e.status === 402 ? "Gemini needs prepaid credit: add some in AI Studio (Billing), then use Edit → Look it up again." : e.status === 429 ? "Gemini's daily limit is used up. Try again tomorrow (Edit → Look it up again)." : `AI couldn't finish (${e.message}). Use Edit → Look it up again, or edit by hand.`; }
   }
 
   const name = String(ai?.name || page?.name || input).slice(0, 120);
