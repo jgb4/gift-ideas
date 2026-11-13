@@ -183,12 +183,69 @@ async function countSearch(env, queries) {
 }
 async function usageReport(env) {
   const u = await getUsage(env);
-  const d = today();
   return {
-    today: u.days[d] || { l: 0, q: 0 }, month: u.months[d.slice(0, 7)] || { l: 0, q: 0 }, total: u.total,
-    days: u.days, months: u.months, dailyCap: cap(env), freeMonthly: 5000,
+    siteMonth: u.months[today().slice(0, 7)] || { l: 0, q: 0 },
+    freeMonthly: 5000,
     searchOn: env.GEMINI_STUB === "1" ? env.STUB_SEARCH === "1" : !(await env.GIFTS.get("search-off")),
+    account: await accountUsage(env),
   };
+}
+
+// ---------- account-wide usage (Google Cloud billing export in BigQuery) ----------
+// Optional secrets: GCP_SA_KEY (service account JSON with BigQuery Data Viewer + Job User)
+// and BQ_TABLE ("project.dataset.gcp_billing_export_v1_XXXXXX"). Cached for an hour.
+async function accountUsage(env) {
+  if (!env.GCP_SA_KEY || !env.BQ_TABLE) return { connected: false };
+  const cached = await env.GIFTS.get("acct-usage", "json");
+  if (cached) return cached;
+  let out;
+  try {
+    if (!/^[\w.-]+\*?$/.test(env.BQ_TABLE)) throw new Error("BQ_TABLE looks wrong");
+    const sa = JSON.parse(env.GCP_SA_KEY);
+    const token = await googleToken(sa);
+    const net = "cost + IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)";
+    const query = `SELECT
+        SUM(IF(LOWER(sku.description) LIKE '%grounding%', usage.amount, 0)) AS searches,
+        ANY_VALUE(IF(LOWER(sku.description) LIKE '%grounding%', usage.unit, NULL)) AS unit,
+        SUM(IF(LOWER(sku.description) LIKE '%grounding%', ${net}, 0)) AS search_cost,
+        SUM(${net}) AS gemini_cost,
+        ANY_VALUE(currency) AS currency,
+        MAX(export_time) AS as_of
+      FROM \`${env.BQ_TABLE}\`
+      WHERE invoice.month = FORMAT_DATE('%Y%m', CURRENT_DATE('America/Los_Angeles'))
+        AND (LOWER(service.description) LIKE '%gemini%' OR LOWER(service.description) LIKE '%generative language%')`;
+    const r = await fetch(`https://bigquery.googleapis.com/bigquery/v2/projects/${sa.project_id}/queries`, {
+      method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ query, useLegacySql: false, timeoutMs: 20000 }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j?.error?.message || "BigQuery error " + r.status);
+    const v = (j.rows?.[0]?.f || []).map((x) => x.v);
+    out = { connected: true, searches: Number(v[0] || 0), unit: v[1] || null, searchCost: Number(v[2] || 0), geminiCost: Number(v[3] || 0),
+      currency: v[4] || "USD", asOf: v[5] ? new Date(Number(v[5]) * 1000).toISOString() : null, checkedAt: new Date().toISOString() };
+    await env.GIFTS.put("acct-usage", JSON.stringify(out), { expirationTtl: 3600 });
+  } catch (e) {
+    out = { connected: true, error: e.message, checkedAt: new Date().toISOString() };
+    await env.GIFTS.put("acct-usage", JSON.stringify(out), { expirationTtl: 600 });
+  }
+  return out;
+}
+
+async function googleToken(sa) {
+  const b64u = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+  const now = Math.floor(Date.now() / 1000);
+  const part = (o) => b64u(enc.encode(JSON.stringify(o)));
+  const unsigned = part({ alg: "RS256", typ: "JWT" }) + "." + part({ iss: sa.client_email, scope: "https://www.googleapis.com/auth/bigquery", aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 3600 });
+  const der = Uint8Array.from(atob(sa.private_key.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "")), (c) => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey("pkcs8", der, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  const sig = new Uint8Array(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, enc.encode(unsigned)));
+  const r = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: "grant_type=" + encodeURIComponent("urn:ietf:params:oauth:grant-type:jwt-bearer") + "&assertion=" + unsigned + "." + b64u(sig),
+  });
+  const j = await r.json();
+  if (!j.access_token) throw new Error("Google sign-in for billing data failed: " + (j.error_description || j.error || r.status));
+  return j.access_token;
 }
 
 const FIELDS = `"name": "short clear product name",
