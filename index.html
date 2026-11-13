@@ -135,17 +135,8 @@
   </form>
 </div>
 
-<!-- 2. Connect Puter (AI + private storage) -->
-<div class="gate" id="connect" hidden>
-  <div class="gate-card">
-    <h1>One more step</h1>
-    <p>Gift lists are saved privately in your Puter account (so they sync across your devices), and Puter runs the AI. No API key needed.</p>
-    <button class="primary" id="connectBtn">Connect Puter</button>
-    <div class="err" id="connectErr"></div>
-  </div>
-</div>
 
-<!-- 3. App -->
+<!-- 2. App -->
 <div class="app" id="app" hidden>
   <aside id="sidebar"></aside>
   <main id="main"></main>
@@ -163,53 +154,42 @@
   </form>
 </dialog>
 
-<script src="https://js.puter.com/v2/"></script>
 <script>
 // ---------- config ----------
-// Password is stored only as a salted PBKDF2-SHA256 hash.
-const PW = { salt: "c0d4c82dba63a1cdfd5c1f8122051fd3", hash: "371b4f804319fd65e3a9d075ba11723cdbc3afb721186484e9496db577c23695", iter: 310000 };
-// Puter models: a cheap model with live web search first, Claude as the fallback.
-const MODELS = { search: "gpt-5.4-mini", fallback: "claude-sonnet-5-5" };
-const KV_KEY = "gift-db-v1";
-const UNLOCK_KEY = "gift-unlock";
+// The API (Cloudflare Worker) checks the password, stores the lists and runs the AI.
+const API = location.hostname === "localhost" ? "http://localhost:8787" : "https://gift-ideas-api.REPLACE.workers.dev";
+const TOKEN_KEY = "gift-token";
 
 const $ = (s) => document.querySelector(s);
 const esc = (s = "") => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const rid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const ls = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} } };
-const show = (id) => ["lock", "connect", "app"].forEach((x) => ($("#" + x).hidden = x !== id));
+const show = (id) => ["lock", "app"].forEach((x) => ($("#" + x).hidden = x !== id));
+let token = ls.get(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
 
-// ---------- 1. password ----------
-async function hashPw(pw) {
-  const hex = (s) => new Uint8Array(s.match(/../g).map((h) => parseInt(h, 16)));
-  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: hex(PW.salt), iterations: PW.iter, hash: "SHA-256" }, base, 256);
-  return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, "0")).join("");
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, { ...opts, headers: { "Content-Type": "application/json", Authorization: "Bearer " + (token || ""), ...(opts.headers || {}) } });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && path !== "/api/login") { lockNow(); throw new Error("Signed out"); }
+  if (!res.ok) throw new Error(data.error || "Request failed (" + res.status + ")");
+  return data;
 }
+
+// ---------- password (checked by the server) ----------
 $("#lockForm").onsubmit = async (e) => {
   e.preventDefault();
   $("#unlockBtn").disabled = true; $("#lockErr").textContent = "";
-  const h = await hashPw($("#pw").value);
-  $("#unlockBtn").disabled = false;
-  if (h !== PW.hash) { $("#lockErr").textContent = "Wrong password."; $("#pw").select(); return; }
-  if ($("#remember").checked) ls.set(UNLOCK_KEY, h);
-  sessionStorage.setItem(UNLOCK_KEY, h);
-  afterUnlock();
+  try {
+    const r = await api("/api/login", { method: "POST", body: JSON.stringify({ password: $("#pw").value }) });
+    token = r.token;
+    if ($("#remember").checked) ls.set(TOKEN_KEY, token); else sessionStorage.setItem(TOKEN_KEY, token);
+    start();
+  } catch (err) { $("#lockErr").textContent = err.message; $("#pw").select(); }
+  finally { $("#unlockBtn").disabled = false; }
 };
-function lockNow() { ls.set(UNLOCK_KEY, null); sessionStorage.removeItem(UNLOCK_KEY); location.reload(); }
+function lockNow() { token = null; ls.set(TOKEN_KEY, null); sessionStorage.removeItem(TOKEN_KEY); show("lock"); }
 
-// ---------- 2. puter ----------
-function afterUnlock() {
-  if (puter.auth.isSignedIn()) return start();
-  show("connect");
-}
-$("#connectBtn").onclick = async () => {
-  $("#connectErr").textContent = "";
-  try { await puter.auth.signIn(); start(); }
-  catch (e) { $("#connectErr").textContent = e?.error === "popup_blocked" || e?.code === "popup_blocked" ? "Your browser blocked the sign-in popup. Allow popups for this site and try again." : "Sign-in didn't finish. Try again."; }
-};
-
-// ---------- storage (Puter KV, private to your account) ----------
+// ---------- storage ----------
 let db = null, sel = { cat: null, prof: null }, saveTimer = null, saveState = "ok";
 function seed() {
   const p = (name, special = false) => ({ id: rid(), name, special, items: [] });
@@ -220,27 +200,27 @@ function seed() {
 }
 async function start() {
   show("app");
-  $("#main").innerHTML = `<p class="sub">Loading your lists…</p>`;
+  $("#sidebar").innerHTML = ""; $("#main").innerHTML = `<p class="sub">Loading your lists…</p>`;
   try {
-    db = await puter.kv.get(KV_KEY);
-    if (!db || !db.categories) { db = seed(); await puter.kv.set(KV_KEY, db); }
-  } catch (e) { $("#main").innerHTML = `<div class="empty">Couldn't load your lists from Puter (${esc(e?.message || e?.error || "unknown error")}). Reload to try again.</div>`; return; }
+    db = await api("/api/data");
+    if (!db?.categories) { db = seed(); await api("/api/data", { method: "PUT", body: JSON.stringify(db) }); }
+  } catch (e) { if (token) $("#main").innerHTML = `<div class="empty">Couldn't load your lists (${esc(e.message)}). Reload to try again.</div>`; return; }
   try { Object.assign(sel, JSON.parse(ls.get("gift-sel") || "{}")); } catch {}
   fixSel(); render(); runQueue();
-  // Pick up changes made on another device when you come back to this tab.
-  addEventListener("focus", async () => {
-    if (saveTimer || queueBusy) return;
-    try { const fresh = await puter.kv.get(KV_KEY); if (fresh?.categories) { db = fresh; fixSel(); render(); } } catch {}
-  });
 }
+// Pick up changes made on another device when you come back to this tab.
+addEventListener("focus", async () => {
+  if (!db || saveTimer || queueBusy) return;
+  try { const fresh = await api("/api/data"); if (fresh?.categories) { db = fresh; fixSel(); render(); } } catch {}
+});
 function save() {
   saveState = "busy"; renderStatus();
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     saveTimer = null;
-    try { await puter.kv.set(KV_KEY, db); saveState = "ok"; } catch (e) { saveState = "bad"; console.error(e); }
+    try { await api("/api/data", { method: "PUT", body: JSON.stringify(db) }); saveState = "ok"; } catch (e) { saveState = "bad"; console.error(e); }
     renderStatus();
-  }, 500);
+  }, 1200);
 }
 
 // ---------- helpers ----------
@@ -262,92 +242,7 @@ function asUrl(input) {
   return null;
 }
 
-// ---------- AI synthesis ----------
-const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error(what + " timed out")), ms))]);
-
-async function readPage(url) {
-  const res = await withTimeout(puter.net.fetch(url), 20000, "Reading the page");
-  const html = (await res.text()).slice(0, 2_000_000);
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  const meta = (k) => doc.querySelector(`meta[property="${k}"],meta[name="${k}"],meta[itemprop="${k}"]`)?.getAttribute("content")?.trim() || null;
-  let ld = null;
-  const walk = (n) => { if (!n || typeof n !== "object") return null; if (Array.isArray(n)) { for (const x of n) { const r = walk(x); if (r) return r; } return null; }
-    if ([].concat(n["@type"] || []).some((t) => /product/i.test(t))) return n; return walk(n["@graph"]) || walk(n.mainEntity); };
-  for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) { try { ld = walk(JSON.parse(s.textContent)); if (ld) break; } catch {} }
-  let price = null;
-  if (ld?.offers) { const o = [].concat(ld.offers)[0]; const a = o?.price ?? o?.lowPrice; if (a != null) price = (o.priceCurrency && o.priceCurrency !== "USD" ? o.priceCurrency + " " : "$") + a; }
-  const amt = meta("product:price:amount") || meta("og:price:amount"); if (!price && amt) price = "$" + amt;
-  let image = ld?.image ? [].concat(ld.image)[0] : null; if (image && typeof image === "object") image = image.url || image.contentUrl;
-  image = image || meta("og:image") || meta("twitter:image");
-  try { image = image ? new URL(image, url).href : null; } catch { image = null; }
-  doc.querySelectorAll("script,style,noscript,svg").forEach((n) => n.remove());
-  return {
-    name: ld?.name || meta("og:title") || doc.title || null,
-    description: ld?.description || meta("og:description") || meta("description") || null,
-    image, price,
-    text: (doc.body?.textContent || "").replace(/\s+/g, " ").trim().slice(0, 6000),
-  };
-}
-
-const SPEC = `Reply with ONLY a JSON object, no other text:
-{"name":"short clear product name","description":"one or two short sentences: what it is and why it's a nice gift","price":"estimated typical price, e.g. \\"$49\\" or \\"$40–60\\"","image":"direct image URL of the product or null","links":[{"store":"Store name","url":"https://...","price":"$.. or null"}]}
-Give 1 to 3 links, best first, as direct product pages from reputable retailers (best price or availability). Never invent URLs: only use ones you found.`;
-
-function buildPrompt(item, page, forWhom) {
-  if (item.sourceUrl) return `Someone is building a gift list (gift for: ${forWhom}). They pasted this link: ${item.sourceUrl}
-
-What the page itself says (may be empty if the site blocks readers):
-${JSON.stringify(page ? { name: page.name, description: page.description, price: page.price } : null)}
-Page text excerpt: """${page?.text?.slice(0, 4000) || ""}"""
-
-Identify the exact product. Search the web for its current price and the best places to buy it (the original store counts).
-${SPEC}`;
-  return `Someone is building a gift list (gift for: ${forWhom}). They typed this gift idea:
-"""${item.query}"""
-
-Turn it into one specific, real product that best matches (if vague, choose a popular, well-reviewed option that fits). Search the web for its current price and the best places to buy it.
-${SPEC}`;
-}
-
-async function askAI(prompt, useSearch) {
-  const opts = useSearch ? { model: MODELS.search, tools: [{ type: "web_search" }] } : { model: MODELS.fallback, normalize: true };
-  const r = await withTimeout(puter.ai.chat(prompt, opts), 120000, "The AI");
-  let c = r?.message?.content;
-  if (Array.isArray(c)) c = c.map((b) => b?.text || "").join("\n");
-  if (typeof c !== "string") c = String(r ?? "");
-  const m = c.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error("AI reply had no JSON");
-  return JSON.parse(m[0]);
-}
-
-async function synthesize(item, forWhom) {
-  let page = null;
-  if (item.sourceUrl) { try { page = await readPage(item.sourceUrl); } catch (e) { console.warn("page read failed", e); } }
-  const prompt = buildPrompt(item, page, forWhom);
-  let ai = null, err = null;
-  try { ai = await askAI(prompt, true); }
-  catch (e1) { console.warn("search model failed", e1); try { ai = await askAI(prompt, false); } catch (e2) { err = e2; } }
-
-  const links = (Array.isArray(ai?.links) ? ai.links : []).filter((l) => /^https?:\/\//.test(l?.url || "")).slice(0, 3);
-  if (!links.length) links.push(item.sourceUrl
-    ? { store: host(item.sourceUrl), url: item.sourceUrl, price: page?.price || null }
-    : { store: "Search Google Shopping", url: "https://www.google.com/search?tbm=shop&q=" + encodeURIComponent(item.query), price: null });
-
-  // Real page images beat AI-guessed ones: try the source page, then the top store page.
-  let image = page?.image || null;
-  if (!image && links[0] && !links[0].url.includes("google.com/search")) { try { image = (await readPage(links[0].url)).image; } catch {} }
-  image = image || ai?.image || null;
-
-  return {
-    name: String(ai?.name || page?.name || item.query || host(item.sourceUrl)).slice(0, 120),
-    description: String(ai?.description || page?.description || "").slice(0, 400),
-    price: String(ai?.price || page?.price || ""),
-    image, links,
-    error: err ? `AI couldn't finish (${err.message || err}). Try ↻ or edit by hand.` : null,
-  };
-}
-
-// One gift at a time keeps us well under Puter's free-tier rate limits.
+// ---------- AI synthesis (one gift at a time, done by the server) ----------
 let queueBusy = false;
 async function runQueue() {
   if (queueBusy) return;
@@ -359,8 +254,8 @@ async function runQueue() {
       if (!next) break;
       const who = next.p.special ? "me (my own wishlist)" : `${next.p.name} (${next.c.name})`;
       let result;
-      try { result = await synthesize(next.i, who); }
-      catch (e) { result = { error: "Something went wrong: " + (e.message || e) }; }
+      try { result = await api("/api/synthesize", { method: "POST", body: JSON.stringify({ input: next.i.sourceUrl || next.i.query, forWhom: who }) }); }
+      catch (e) { if (!token) return; result = { error: "Something went wrong: " + e.message }; }
       const live = findItem(next.i.id)?.i; // may have been deleted meanwhile
       if (live) { Object.assign(live, result, { status: "ready" }); save(); render(); }
     }
@@ -370,7 +265,7 @@ async function runQueue() {
 // ---------- render ----------
 function renderStatus() {
   const el = $("#syncStatus"); if (!el) return;
-  el.innerHTML = saveState === "busy" ? `<span class="dot busy"></span>Saving…` : saveState === "bad" ? `<span class="dot bad"></span>Couldn't save` : `<span class="dot"></span>Saved to Puter`;
+  el.innerHTML = saveState === "busy" ? `<span class="dot busy"></span>Saving…` : saveState === "bad" ? `<span class="dot bad"></span>Couldn't save` : `<span class="dot"></span>Saved`;
 }
 
 function render() {
@@ -417,7 +312,7 @@ function profileView(p) {
       <input id="gift" type="text" required placeholder="Paste a product link, or describe a gift (e.g. &quot;cozy wool slippers, size 9&quot;)…" autocomplete="off" />
       <button class="primary" id="addBtn">Add gift</button>
     </form>
-    <p class="hint">AI finds the product, writes a quick description, estimates the price and searches for the best places to buy. It takes about 10–40 seconds per gift.</p>
+    <p class="hint">AI finds the product, writes a quick description, estimates the price and searches for the best places to buy. It takes about 5–20 seconds per gift.</p>
     <div class="list">
       ${p.items.length ? p.items.map(giftRow).join("") : `<div class="empty"><div class="big">${p.special ? "✨" : "🎁"}</div>No gifts yet. Paste a link or describe a gift above.</div>`}
     </div>
@@ -499,8 +394,7 @@ function addProfile(cat) {
 }
 
 // ---------- boot ----------
-const remembered = ls.get(UNLOCK_KEY) || sessionStorage.getItem(UNLOCK_KEY);
-if (remembered === PW.hash) afterUnlock(); else show("lock");
+if (token) start(); else show("lock");
 </script>
 </body>
 </html>
