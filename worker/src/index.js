@@ -4,7 +4,7 @@
 // - POST /api/synthesize   link or description -> { name, description, price, image, links }
 //
 // Secrets (set with `wrangler secret put`): GEMINI_API_KEY, SESSION_SECRET, PW_SALT, PW_HASH
-// Vars (wrangler.toml): ALLOWED_ORIGINS, GEMINI_MODEL
+// Vars (wrangler.toml): ALLOWED_ORIGINS, GEMINI_MODEL, DAILY_SEARCH_CAP
 // Optional for local testing only: GEMINI_STUB=1 returns a canned AI answer.
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
@@ -41,9 +41,9 @@ export default {
         return json({ ok: true });
       }
       if (path === "/api/synthesize" && req.method === "POST") {
-        const { input, forWhom } = await req.json();
+        const { input, forWhom, mode } = await req.json();
         if (!input || typeof input !== "string") return json({ error: "input required" }, 400);
-        return json(await synthesize(input.trim().slice(0, 1000), String(forWhom || "someone").slice(0, 100), env));
+        return json(await synthesize(input.trim().slice(0, 1000), String(forWhom || "someone").slice(0, 100), mode === "stores" ? "stores" : "auto", env));
       }
       return json({ error: "Not found" }, 404);
     } catch (e) {
@@ -132,7 +132,7 @@ function finish(o) {
 
 // ---------- Gemini ----------
 async function gemini(env, prompt, useSearch) {
-  if (env.GEMINI_STUB === "1") return stubAnswer(prompt);
+  if (env.GEMINI_STUB === "1") return stubAnswer(prompt, useSearch);
   const body = { model: env.GEMINI_MODEL || "gemini-3.5-flash-lite", input: prompt };
   if (useSearch) body.tools = [{ type: "google_search" }];
   const r = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
@@ -152,10 +152,18 @@ async function gemini(env, prompt, useSearch) {
   return JSON.parse(match[0]);
 }
 
-// Live search only works once billing is on. Try it once a day; otherwise use the free path.
-async function searchAvailable(env) {
-  if (env.GEMINI_STUB === "1") return false;
-  return (await env.GIFTS.get("search-off")) == null;
+// ---------- search budget ----------
+// Live search only works once billing is on; if Google refuses it, we retry in an hour.
+// DAILY_SEARCH_CAP (default 200) bounds how many searched lookups run per day (Pacific time).
+const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+async function canSearch(env) {
+  if (env.GEMINI_STUB === "1" ? env.STUB_SEARCH !== "1" : await env.GIFTS.get("search-off")) return false;
+  const used = Number((await env.GIFTS.get("searches:" + today())) || 0);
+  return used < Number(env.DAILY_SEARCH_CAP || 200);
+}
+async function countSearch(env) {
+  const k = "searches:" + today();
+  await env.GIFTS.put(k, String(Number((await env.GIFTS.get(k)) || 0) + 1), { expirationTtl: 172800 });
 }
 
 const FIELDS = `"name": "short clear product name",
@@ -167,7 +175,7 @@ function prompt(input, url, page, forWhom, withSearch) {
     ? `They pasted this link: ${url}
 What the page says (may be empty if the site blocks readers): ${JSON.stringify(page ? { name: page.name, description: page.description, price: page.price } : null)}
 Page text excerpt: """${page?.text?.slice(0, 3000) || ""}"""
-Identify the exact product.`
+Identify the exact product (the link text itself often names it).`
     : `They typed this gift idea: """${input}"""
 Turn it into one specific, real, currently sold product that best matches (if vague, pick a popular, well-reviewed option).`;
   const tail = withSearch
@@ -175,28 +183,36 @@ Turn it into one specific, real, currently sold product that best matches (if va
 Reply with ONLY a JSON object:
 { ${FIELDS}
   "image": "direct product image URL you found, or null",
-  "links": [{"store": "Store name", "url": "https://...", "price": "$.. or null"}] }
+  "links": [{"store": "Store name", "url": "https://...", "price": "$.. or null"}],
+  "searchQuery": "short brand + model search query" }
 1 to 3 links, best first. Only URLs you actually found.`
     : `Reply with ONLY a JSON object:
 { ${FIELDS}
-  "officialUrl": "your best guess at the brand's own product page URL, or null if unsure",
-  "searchQuery": "a short search query (brand + model) to find it in stores" }`;
+  "productUrls": ["up to 3 likely direct product page URLs: the brand's own shop first, then retailers like REI, Best Buy, Nordstrom, Uncommon Goods, Etsy"],
+  "searchQuery": "short brand + model search query" }`;
   return `Someone is building a gift list (gift for: ${forWhom}).\n${what}\n${tail}`;
 }
 
-async function synthesize(input, forWhom, env) {
+// Sites that block page readers; skip them when hunting for a photo.
+const BLOCKS_READERS = /(^|\.)(amazon|walmart|target|google|ebay)\./i;
+
+// mode "auto": search only when it adds something (typed ideas, or links whose page can't be read).
+// mode "stores": the "Find best stores" button, always searches if allowed.
+async function synthesize(input, forWhom, mode, env) {
   const url = asUrl(input);
   let page = null;
   if (url) { try { page = await readPage(url); } catch {} }
+  const pageIsGood = !!(page?.ok && page.isProduct && page.name);
 
-  let ai = null, usedSearch = false, error = null;
-  if (await searchAvailable(env)) {
-    try { ai = await gemini(env, prompt(input, url, page, forWhom, true), true); usedSearch = true; }
-    catch (e) { if ([400, 403, 429].includes(e.status)) await env.GIFTS.put("search-off", "1", { expirationTtl: 86400 }); }
-  }
+  const wantSearch = mode === "stores" || !url || !pageIsGood;
+  let ai = null, usedSearch = false, error = null, note = null;
+  if (wantSearch && (await canSearch(env))) {
+    try { ai = await gemini(env, prompt(input, url, page, forWhom, true), true); usedSearch = true; await countSearch(env); }
+    catch (e) { if ([400, 403].includes(e.status)) await env.GIFTS.put("search-off", "1", { expirationTtl: 3600 }); }
+  } else if (mode === "stores") note = "Live store search isn't available right now (billing off or today's search limit reached).";
   if (!ai) {
     try { ai = await gemini(env, prompt(input, url, page, forWhom, false), false); }
-    catch (e) { error = e.status === 429 ? "Gemini's free daily limit is used up. Try ↻ tomorrow." : `AI couldn't finish (${e.message}). Try ↻ or edit by hand.`; }
+    catch (e) { error = e.status === 429 ? "Gemini's daily limit is used up. Try ↻ tomorrow." : `AI couldn't finish (${e.message}). Try ↻ or edit by hand.`; }
   }
 
   const name = String(ai?.name || page?.name || input).slice(0, 120);
@@ -205,15 +221,28 @@ async function synthesize(input, forWhom, env) {
   if (url) add({ store: host(page?.finalUrl || url), url: page?.finalUrl || url, price: page?.price || null });
 
   let image = page?.image || null;
+  let checks = 0;
+  const tryPage = async (u, keepLink) => {
+    if (checks >= 4 || !asUrl(u) || BLOCKS_READERS.test(host(u))) return;
+    checks++;
+    try {
+      const p = await readPage(u);
+      if (!(p.ok && p.isProduct && new URL(p.finalUrl).pathname.length > 1)) return;
+      if (keepLink) add({ store: host(p.finalUrl), url: p.finalUrl, price: p.price });
+      if (!image && p.image) image = p.image;
+      if (!links.find((l) => host(l.url) === host(p.finalUrl))?.price && p.price) { const l = links.find((x) => host(x.url) === host(p.finalUrl)); if (l) l.price = p.price; }
+    } catch {}
+  };
   if (usedSearch) {
     for (const l of Array.isArray(ai?.links) ? ai.links : []) add({ store: l.store || host(l.url), url: l.url, price: l.price || null });
+    for (const l of [...links]) { if (image) break; await tryPage(l.url, false); }
     image = image || ai?.image || null;
-  } else if (ai?.officialUrl && asUrl(ai.officialUrl)) {
-    // Only keep the AI's guessed product page if it really exists and looks like a product.
-    try {
-      const p = await readPage(ai.officialUrl);
-      if (p.ok && p.isProduct && new URL(p.finalUrl).pathname.length > 1) { add({ store: host(p.finalUrl), url: p.finalUrl, price: p.price }); image = image || p.image; }
-    } catch {}
+  } else {
+    // No live search: only keep guessed pages that really exist and look like products.
+    for (const u of (Array.isArray(ai?.productUrls) ? ai.productUrls : []).slice(0, 3)) {
+      if (links.length >= 2 && image) break;
+      await tryPage(u, true);
+    }
   }
   const q = encodeURIComponent(ai?.searchQuery || name);
   if (links.length < 3) add({ store: "Amazon", url: `https://www.amazon.com/s?k=${q}`, price: null });
@@ -222,11 +251,12 @@ async function synthesize(input, forWhom, env) {
   return {
     name,
     description: String(ai?.description || page?.description || "").slice(0, 400),
-    price: String(page?.price || ai?.price || ""),
+    price: String(page?.price || links.find((l) => l.price)?.price || ai?.price || ""),
     image,
     links: links.slice(0, 3),
     sourceUrl: url,
-    error,
+    searched: usedSearch,
+    error: error || note,
   };
 }
 
@@ -238,7 +268,10 @@ function asUrl(input) {
   return null;
 }
 
-function stubAnswer(p) {
-  if (p.includes("slippers")) return { name: "Glerups Felt Slipper", description: "Warm boiled-wool slippers with a soft leather sole.", price: "$90", officialUrl: "https://www.glerups.com/", searchQuery: "Glerups felt slipper" };
-  return { name: "Stub Product", description: "Stub description.", price: "$10", officialUrl: null, searchQuery: "stub product" };
+function stubAnswer(p, search) {
+  if (search) return { name: "Glerups Felt Slipper", description: "Warm boiled-wool slippers.", price: "$90", image: null, searchQuery: "Glerups felt slipper",
+    links: [{ store: "Allbirds (test)", url: "https://www.allbirds.com/products/mens-wool-runners", price: null }, { store: "Amazon", url: "https://www.amazon.com/dp/B000TEST", price: "$85" }] };
+  if (p.includes("slippers")) return { name: "Glerups Felt Slipper", description: "Warm boiled-wool slippers with a soft leather sole.", price: "$90", searchQuery: "Glerups felt slipper",
+    productUrls: ["https://www.glerups.com/", "https://www.allbirds.com/products/mens-wool-runners"] };
+  return { name: "Stub Product", description: "Stub description.", price: "$10", productUrls: [], searchQuery: "stub product" };
 }
