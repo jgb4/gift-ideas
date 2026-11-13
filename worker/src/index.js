@@ -141,8 +141,10 @@ async function gemini(env, prompt, useSearch) {
     headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY, "Api-Revision": "2026-05-20" },
     body: JSON.stringify(body),
   });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) { const e = new Error(j?.error?.message || `Gemini error ${r.status}`); e.status = r.status; throw e; }
+  const raw = await r.text();
+  let j = {}; try { j = JSON.parse(raw); } catch {}
+  if (Array.isArray(j)) j = j[0] || {}; // errors sometimes come wrapped in an array
+  if (!r.ok) { const e = new Error(j?.error?.message || j?.message || `Gemini error ${r.status}: ${raw.slice(0, 300)}`); e.status = r.status; throw e; }
   const texts = [];
   if (typeof j.output_text === "string") texts.push(j.output_text);
   for (const s of j.steps || []) if (s.type === "model_output") for (const c of s.content || []) if (c.text) texts.push(c.text);
@@ -294,7 +296,7 @@ async function synthesize(input, forWhom, mode, env) {
   } else if (mode === "stores") note = "Live store search isn't available right now (billing off or today's search limit reached).";
   if (!ai) {
     try { ai = await gemini(env, prompt(input, url, page, forWhom, false), false); }
-    catch (e) { console.log("gemini failed", e.status, e.message); error = e.status === 429 ? "Gemini's daily limit is used up. Try ↻ tomorrow." : `AI couldn't finish (${e.message}). Try ↻ or edit by hand.`; }
+    catch (e) { console.log("gemini failed", e.status, e.message); error = e.status === 402 ? "Gemini needs prepaid credit: add some in AI Studio (Billing), then press ↻." : e.status === 429 ? "Gemini's daily limit is used up. Try ↻ tomorrow." : `AI couldn't finish (${e.message}). Try ↻ or edit by hand.`; }
   }
 
   const name = String(ai?.name || page?.name || input).slice(0, 120);
