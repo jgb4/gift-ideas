@@ -261,9 +261,13 @@ What the page says (may be empty if the site blocks readers): ${JSON.stringify(p
 Page text excerpt: """${page?.text?.slice(0, 3000) || ""}"""
 Identify the exact product (the link text itself often names it).`
     : `They typed this gift idea: """${input}"""
-Turn it into one specific, real, currently sold product that best matches (if vague, pick a popular, well-reviewed option).`;
+Turn it into one specific, real, currently sold product that best matches.
+- If they name a brand, pick from that brand's current lineup (check the brand's own website).
+- Words like "best", "top", "nicest", "premium", "fanciest" mean the brand's top-of-the-line / flagship model, not its most popular or cheapest one.
+- If the idea is vague with no brand, pick a popular, well-reviewed option that fits.`;
   const tail = withSearch
-    ? `Search the web for the current price and the best places to buy it (reputable retailers, best price or availability, direct product pages).
+    ? `Search the web for the current price and the best places to buy it (reputable retailers, best price or availability).
+Every link must be a direct product page for this exact model, never a homepage, category or search page. If the brand sells it on its own site, list that product page first.
 Reply with ONLY a JSON object:
 { ${FIELDS}
   "image": "direct product image URL you found, or null",
@@ -318,7 +322,8 @@ async function synthesize(input, forWhom, mode, env) {
     } catch {}
   };
   if (usedSearch) {
-    for (const l of Array.isArray(ai?.links) ? ai.links : []) add({ store: l.store || host(l.url), url: l.url, price: l.price || null });
+    const isHome = (u) => { try { return new URL(u).pathname.replace(/\/+$/, "") === ""; } catch { return true; } };
+    for (const l of Array.isArray(ai?.links) ? ai.links : []) if (!isHome(l.url)) add({ store: l.store || host(l.url), url: l.url, price: l.price || null });
     for (const l of [...links]) { if (image) break; await tryPage(l.url, false); }
     image = image || ai?.image || null;
   } else {
