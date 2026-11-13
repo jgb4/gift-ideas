@@ -289,12 +289,12 @@ async function synthesize(input, forWhom, mode, env) {
   const wantSearch = mode === "stores" || !url || !pageIsGood;
   let ai = null, usedSearch = false, error = null, note = null, queries = 0;
   if (wantSearch && (await canSearch(env))) {
-    try { ai = await gemini(env, prompt(input, url, page, forWhom, true), true); usedSearch = true; queries = ai.__queries || 0; await countSearch(env, queries); }
-    catch (e) { if ([400, 403].includes(e.status)) await env.GIFTS.put("search-off", "1", { expirationTtl: 3600 }); }
+    try { ai = await gemini(env, prompt(input, url, page, forWhom, true), true); usedSearch = true; queries = ai.__queries || 0; console.log("search ok", queries, "queries"); await countSearch(env, queries); }
+    catch (e) { console.log("search failed", e.status, e.message); if ([400, 403].includes(e.status)) await env.GIFTS.put("search-off", "1", { expirationTtl: 3600 }); }
   } else if (mode === "stores") note = "Live store search isn't available right now (billing off or today's search limit reached).";
   if (!ai) {
     try { ai = await gemini(env, prompt(input, url, page, forWhom, false), false); }
-    catch (e) { error = e.status === 429 ? "Gemini's daily limit is used up. Try ↻ tomorrow." : `AI couldn't finish (${e.message}). Try ↻ or edit by hand.`; }
+    catch (e) { console.log("gemini failed", e.status, e.message); error = e.status === 429 ? "Gemini's daily limit is used up. Try ↻ tomorrow." : `AI couldn't finish (${e.message}). Try ↻ or edit by hand.`; }
   }
 
   const name = String(ai?.name || page?.name || input).slice(0, 120);
