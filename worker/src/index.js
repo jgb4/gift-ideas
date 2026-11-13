@@ -31,6 +31,7 @@ export default {
 
       if (!(await authed(req, env))) return json({ error: "Not signed in" }, 401);
 
+      if (path === "/api/usage" && req.method === "GET") return json(await usageReport(env));
       if (path === "/api/data" && req.method === "GET") return json((await env.GIFTS.get("db", "json")) || null);
       if (path === "/api/data" && req.method === "PUT") {
         const body = await req.text();
@@ -149,21 +150,45 @@ async function gemini(env, prompt, useSearch) {
   const text = texts.join("\n");
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("AI reply had no JSON");
-  return JSON.parse(match[0]);
+  const out = JSON.parse(match[0]);
+  // How many Google searches Gemini actually ran for this answer.
+  let queries = 0;
+  for (const s of j.steps || []) if (s.type === "google_search_call") queries += Array.isArray(s.arguments?.queries) ? s.arguments.queries.length : 1;
+  for (const c of j.candidates || []) queries += c.groundingMetadata?.webSearchQueries?.length || 0;
+  out.__queries = queries;
+  return out;
 }
 
 // ---------- search budget ----------
 // Live search only works once billing is on; if Google refuses it, we retry in an hour.
 // DAILY_SEARCH_CAP (default 200) bounds how many searched lookups run per day (Pacific time).
 const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+const cap = (env) => Number(env.DAILY_SEARCH_CAP || 200);
+// Usage lives in one KV record: { days: {"2026-11-13": {l, q}}, months: {"2026-11": {l, q}}, total: {l, q} }
+// l = searched lookups (what the daily cap counts), q = Google search queries Gemini ran.
+async function getUsage(env) {
+  const u = (await env.GIFTS.get("usage", "json")) || {};
+  return { days: u.days || {}, months: u.months || {}, total: u.total || { l: 0, q: 0 } };
+}
 async function canSearch(env) {
   if (env.GEMINI_STUB === "1" ? env.STUB_SEARCH !== "1" : await env.GIFTS.get("search-off")) return false;
-  const used = Number((await env.GIFTS.get("searches:" + today())) || 0);
-  return used < Number(env.DAILY_SEARCH_CAP || 200);
+  return ((await getUsage(env)).days[today()]?.l || 0) < cap(env);
 }
-async function countSearch(env) {
-  const k = "searches:" + today();
-  await env.GIFTS.put(k, String(Number((await env.GIFTS.get(k)) || 0) + 1), { expirationTtl: 172800 });
+async function countSearch(env, queries) {
+  const u = await getUsage(env);
+  const d = today(), m = d.slice(0, 7);
+  for (const rec of [(u.days[d] ||= { l: 0, q: 0 }), (u.months[m] ||= { l: 0, q: 0 }), u.total]) { rec.l += 1; rec.q += queries; }
+  for (const k of Object.keys(u.days).sort().slice(0, -62)) delete u.days[k]; // keep ~2 months of daily detail
+  await env.GIFTS.put("usage", JSON.stringify(u));
+}
+async function usageReport(env) {
+  const u = await getUsage(env);
+  const d = today();
+  return {
+    today: u.days[d] || { l: 0, q: 0 }, month: u.months[d.slice(0, 7)] || { l: 0, q: 0 }, total: u.total,
+    days: u.days, months: u.months, dailyCap: cap(env), freeMonthly: 5000,
+    searchOn: env.GEMINI_STUB === "1" ? env.STUB_SEARCH === "1" : !(await env.GIFTS.get("search-off")),
+  };
 }
 
 const FIELDS = `"name": "short clear product name",
@@ -205,9 +230,9 @@ async function synthesize(input, forWhom, mode, env) {
   const pageIsGood = !!(page?.ok && page.isProduct && page.name);
 
   const wantSearch = mode === "stores" || !url || !pageIsGood;
-  let ai = null, usedSearch = false, error = null, note = null;
+  let ai = null, usedSearch = false, error = null, note = null, queries = 0;
   if (wantSearch && (await canSearch(env))) {
-    try { ai = await gemini(env, prompt(input, url, page, forWhom, true), true); usedSearch = true; await countSearch(env); }
+    try { ai = await gemini(env, prompt(input, url, page, forWhom, true), true); usedSearch = true; queries = ai.__queries || 0; await countSearch(env, queries); }
     catch (e) { if ([400, 403].includes(e.status)) await env.GIFTS.put("search-off", "1", { expirationTtl: 3600 }); }
   } else if (mode === "stores") note = "Live store search isn't available right now (billing off or today's search limit reached).";
   if (!ai) {
@@ -256,6 +281,7 @@ async function synthesize(input, forWhom, mode, env) {
     links: links.slice(0, 3),
     sourceUrl: url,
     searched: usedSearch,
+    searchQueries: queries,
     error: error || note,
   };
 }
@@ -269,7 +295,7 @@ function asUrl(input) {
 }
 
 function stubAnswer(p, search) {
-  if (search) return { name: "Glerups Felt Slipper", description: "Warm boiled-wool slippers.", price: "$90", image: null, searchQuery: "Glerups felt slipper",
+  if (search) return { __queries: 2, name: "Glerups Felt Slipper", description: "Warm boiled-wool slippers.", price: "$90", image: null, searchQuery: "Glerups felt slipper",
     links: [{ store: "Allbirds (test)", url: "https://www.allbirds.com/products/mens-wool-runners", price: null }, { store: "Amazon", url: "https://www.amazon.com/dp/B000TEST", price: "$85" }] };
   if (p.includes("slippers")) return { name: "Glerups Felt Slipper", description: "Warm boiled-wool slippers with a soft leather sole.", price: "$90", searchQuery: "Glerups felt slipper",
     productUrls: ["https://www.glerups.com/", "https://www.allbirds.com/products/mens-wool-runners"] };

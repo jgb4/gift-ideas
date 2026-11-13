@@ -48,6 +48,13 @@
   .side-foot { margin-top: auto; padding: 16px 8px 0; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
   .side-foot button { background: none; border: 0; color: var(--muted); padding: 0; text-align: left; font-size: 12px; }
   .side-foot button:hover { color: var(--ink); }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .usage-table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 12px 0; }
+  .usage-table th, .usage-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .usage-table td.n, .usage-table th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 4px; }
+  .bar > span { display: block; height: 100%; background: var(--accent); }
+  .small { font-size: 12px; color: var(--muted); }
   .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--good); margin-right: 6px; }
   .dot.busy { background: var(--warn); }
   .dot.bad { background: var(--danger); }
@@ -142,6 +149,14 @@
   <main id="main"></main>
 </div>
 
+<dialog id="usageDlg">
+  <form method="dialog">
+    <strong>🔍 Search usage (this site)</strong>
+    <div id="usageBody"></div>
+    <div class="row"><button class="primary" value="close">Close</button></div>
+  </form>
+</dialog>
+
 <dialog id="edit">
   <form method="dialog" id="editForm">
     <strong>Edit gift</strong>
@@ -206,7 +221,7 @@ async function start() {
     if (!db?.categories) { db = seed(); await api("/api/data", { method: "PUT", body: JSON.stringify(db) }); }
   } catch (e) { if (token) $("#main").innerHTML = `<div class="empty">Couldn't load your lists (${esc(e.message)}). Reload to try again.</div>`; return; }
   try { Object.assign(sel, JSON.parse(ls.get("gift-sel") || "{}")); } catch {}
-  fixSel(); render(); runQueue();
+  fixSel(); render(); runQueue(); loadUsage();
 }
 // Pick up changes made on another device when you come back to this tab.
 addEventListener("focus", async () => {
@@ -258,8 +273,45 @@ async function runQueue() {
       catch (e) { if (!token) return; result = { error: "Something went wrong: " + e.message }; }
       const live = findItem(next.i.id)?.i; // may have been deleted meanwhile
       if (live) { Object.assign(live, result, { status: "ready", mode: null }); save(); render(); }
+      if (result.searched) loadUsage();
     }
   } finally { queueBusy = false; }
+}
+
+// ---------- search usage ----------
+let usage = null;
+async function loadUsage() { try { usage = await api("/api/usage"); renderUsageBtn(); } catch {} }
+const fmt = (n) => Number(n || 0).toLocaleString();
+function renderUsageBtn() {
+  const b = $("#usageBtn"); if (!b) return;
+  if (!usage) { b.textContent = ""; return; }
+  b.textContent = usage.searchOn
+    ? `🔍 This site: ${fmt(usage.today.q)} today · ${fmt(usage.month.q)} this month`
+    : "🔍 Live search off (free mode)";
+}
+async function openUsage() {
+  await loadUsage();
+  const u = usage; if (!u) return;
+  const pct = Math.min(100, (u.month.q / u.freeMonthly) * 100);
+  const capPct = Math.min(100, (u.today.l / u.dailyCap) * 100);
+  const ym = Object.keys(u.days).sort().reverse();
+  $("#usageBody").innerHTML = `
+    <p class="small">${u.searchOn ? "Live Google Search is on." : "Live search is off right now (billing not on, or Google refused it). Gifts use the free mode."}
+    A <b>lookup</b> is one gift searched; each lookup can run several Google <b>searches</b>.</p>
+    <table class="usage-table">
+      <tr><th></th><th class="n">Lookups</th><th class="n">Google searches</th></tr>
+      <tr><td>Today</td><td class="n">${fmt(u.today.l)}</td><td class="n">${fmt(u.today.q)}</td></tr>
+      <tr><td>This month</td><td class="n">${fmt(u.month.l)}</td><td class="n">${fmt(u.month.q)}</td></tr>
+      <tr><td>All time</td><td class="n">${fmt(u.total.l)}</td><td class="n">${fmt(u.total.q)}</td></tr>
+    </table>
+    <div class="small">This site's share of Google's ${fmt(u.freeMonthly)} free monthly searches: ${fmt(u.month.q)}</div>
+    <div class="bar"><span style="width:${pct}%"></span></div>
+    <div class="small" style="margin-top:10px">Daily safety cap: ${fmt(u.today.l)} of ${fmt(u.dailyCap)} lookups today</div>
+    <div class="bar"><span style="width:${capPct}%"></span></div>
+    ${ym.length ? `<table class="usage-table"><tr><th>Day</th><th class="n">Lookups</th><th class="n">Searches</th></tr>
+      ${ym.slice(0, 31).map((d) => `<tr><td>${d}</td><td class="n">${fmt(u.days[d].l)}</td><td class="n">${fmt(u.days[d].q)}</td></tr>`).join("")}</table>` : ""}
+    <p class="small">Counts only searches made by this site (days in Pacific time). Other projects on your Google account aren't included; Google's billing reports are the final word.</p>`;
+  $("#usageDlg").showModal();
 }
 
 // ---------- render ----------
@@ -275,10 +327,12 @@ function render() {
       const n = c.profiles.reduce((s, p) => s + p.items.length, 0);
       return `<button class="cat ${c.id === sel.cat ? "active" : ""}" data-cat="${c.id}"><span>${esc(c.emoji || "🎁")}</span>${esc(c.name)}<span class="count">${n}</span></button>`;
     }).join("") + `<button class="ghost" id="addCat">+ New category</button>
-    <div class="side-foot"><span id="syncStatus"></span><button id="lockBtn">🔒 Lock</button></div>`;
+    <div class="side-foot"><button id="usageBtn" title="Search usage"></button><span id="syncStatus"></span><button id="lockBtn">🔒 Lock</button></div>`;
   sb.querySelectorAll("[data-cat]").forEach((b) => (b.onclick = () => select(b.dataset.cat, cats().find((c) => c.id === b.dataset.cat).profiles[0]?.id)));
   $("#addCat").onclick = addCategory;
   $("#lockBtn").onclick = lockNow;
+  $("#usageBtn").onclick = openUsage;
+  renderUsageBtn();
   renderStatus();
 
   const m = $("#main");
@@ -335,6 +389,7 @@ function giftRow(i) {
         ${i.description ? `<p class="gdesc">${esc(i.description)}</p>` : ""}
         <div class="links">${(i.links || []).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.store || "Store")}${l.price ? `<span class="lp">${esc(l.price)}</span>` : ""}</a>`).join("")}</div>
         ${i.error ? `<div class="note">${esc(i.error)}</div>` : ""}
+        ${i.searched ? `<div class="meta">🔍 ${i.searchQueries ? `${i.searchQueries} Google search${i.searchQueries === 1 ? "" : "es"} for this gift` : "Searched (Google didn't report how many)"}</div>` : ""}
       </div>
       <div class="right">
         <div class="price">${esc(i.price || "—")}<small>estimated</small></div>
