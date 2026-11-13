@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Gift Ideas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f7f4ee; --panel: #ffffff; --ink: #1f2430; --muted: #6b7180; --line: #e6e1d6;
+    --accent: #2f5bd3; --accent-soft: #e8eefc; --gold: #b8860b; --gold-soft: #fbf3dc;
+    --good: #2e7d4f; --good-soft: #e4f3ea; --warn: #9a5b00; --warn-soft: #fff2dc; --danger: #b3261e;
+    --shadow: 0 1px 2px rgba(20,20,40,.05), 0 4px 16px rgba(20,20,40,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14161c; --panel: #1c1f27; --ink: #e9eaee; --muted: #9aa0ad; --line: #2c303b;
+      --accent: #7c9cff; --accent-soft: #232c45; --gold: #e3b54a; --gold-soft: #2e2716;
+      --good: #6cc995; --good-soft: #1b2e24; --warn: #f0b45a; --warn-soft: #2f2617; --danger: #ff8a80;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25); }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 Inter, system-ui, sans-serif; }
+  button { font: inherit; cursor: pointer; }
+  [hidden] { display: none !important; }
+
+  /* gate screens */
+  .gate { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+  .gate-card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 32px; width: min(380px, 100%); box-shadow: var(--shadow); text-align: center; }
+  .gate-card h1 { font-family: Fraunces, Georgia, serif; font-size: 30px; margin: 0 0 4px; }
+  .gate-card p { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+  .gate-card input[type=password] { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+  .gate-card label { display: flex; gap: 8px; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .gate-card .primary { width: 100%; padding: 12px; }
+  .err { color: var(--danger); font-size: 13px; min-height: 20px; margin-top: 10px; }
+
+  .app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+  aside { border-right: 1px solid var(--line); padding: 24px 16px; background: var(--panel); display: flex; flex-direction: column; }
+  .brand { font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 650; margin: 0 8px 24px; }
+  .brand span { color: var(--accent); }
+  .cat { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; background: none; color: var(--ink); border-radius: 10px; text-align: left; font-weight: 500; }
+  .cat:hover { background: var(--bg); }
+  .cat.active { background: var(--accent-soft); color: var(--accent); }
+  .cat .count { margin-left: auto; font-size: 12px; color: var(--muted); }
+  .ghost { border: 1px dashed var(--line); background: none; color: var(--muted); border-radius: 10px; padding: 8px 12px; width: 100%; margin-top: 8px; }
+  .ghost:hover { color: var(--ink); border-color: var(--muted); }
+  .side-foot { margin-top: auto; padding: 16px 8px 0; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
+  .side-foot button { background: none; border: 0; color: var(--muted); padding: 0; text-align: left; font-size: 12px; }
+  .side-foot button:hover { color: var(--ink); }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--good); margin-right: 6px; }
+  .dot.busy { background: var(--warn); }
+  .dot.bad { background: var(--danger); }
+
+  main { padding: 32px clamp(16px, 4vw, 48px); max-width: 1100px; width: 100%; }
+  h1.cat-title { font-family: Fraunces, Georgia, serif; font-weight: 650; font-size: 34px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .profiles { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 24px; }
+  .chip { display: flex; align-items: center; gap: 8px; padding: 8px 14px 8px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-weight: 500; }
+  .chip .av { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; }
+  .chip.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .chip.special .av { background: var(--gold-soft); color: var(--gold); }
+  .chip.special.active { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-soft); }
+  .chip small { color: var(--muted); font-weight: 400; }
+  .chip.add { padding: 8px 14px; border-style: dashed; color: var(--muted); }
+  .profile-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+  .profile-head h2 { font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 650; margin: 0; }
+  .badge { display: inline-block; font: 600 11px Inter, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: var(--gold); background: var(--gold-soft); padding: 3px 8px; border-radius: 999px; vertical-align: middle; margin-left: 8px; }
+  .stats { color: var(--muted); font-size: 14px; }
+  .stats b { color: var(--ink); }
+  form.add-link { display: flex; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 8px; box-shadow: var(--shadow); margin-bottom: 8px; }
+  form.add-link input { flex: 1; min-width: 0; border: 0; background: none; color: var(--ink); font: inherit; padding: 8px 10px; outline: none; }
+  .primary { border: 0; background: var(--accent); color: #fff; border-radius: 10px; padding: 10px 18px; font-weight: 600; white-space: nowrap; }
+  .primary:disabled { opacity: .6; }
+  .special-theme .primary { background: var(--gold); }
+  .hint { color: var(--muted); font-size: 13px; margin: 0 4px 24px; }
+  .list { display: flex; flex-direction: column; gap: 12px; }
+  .gift { display: grid; grid-template-columns: 96px 1fr auto; gap: 18px; align-items: start; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; box-shadow: var(--shadow); }
+  .gift.bought { opacity: .6; }
+  .gift.bought .gname { text-decoration: line-through; }
+  .thumb { width: 96px; height: 96px; border-radius: 10px; background: var(--bg); display: grid; place-items: center; font-size: 34px; overflow: hidden; }
+  .thumb img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+  .gname { font-weight: 600; font-size: 16px; margin: 2px 0 4px; overflow-wrap: anywhere; }
+  .gdesc { color: var(--muted); margin: 0 0 10px; font-size: 14px; }
+  .links { display: flex; gap: 6px; flex-wrap: wrap; }
+  .links a { font-size: 13px; text-decoration: none; color: var(--accent); background: var(--accent-soft); padding: 4px 10px; border-radius: 999px; }
+  .links a:hover { text-decoration: underline; }
+  .links a .lp { color: var(--muted); margin-left: 4px; }
+  .right { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+  .price { font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 650; white-space: nowrap; }
+  .price small { display: block; font: 400 11px Inter, sans-serif; color: var(--muted); }
+  .actions { display: flex; gap: 4px; }
+  .icon { border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 8px; padding: 4px 8px; font-size: 13px; }
+  .icon:hover { color: var(--ink); }
+  .icon.on { background: var(--good-soft); color: var(--good); border-color: transparent; }
+  .note { font-size: 12px; color: var(--warn); background: var(--warn-soft); padding: 4px 8px; border-radius: 8px; margin-top: 8px; display: inline-block; }
+  .loading .gname { color: var(--muted); }
+  .shimmer { height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--line), var(--bg), var(--line)); background-size: 200% 100%; animation: sh 1.2s infinite; margin: 8px 0; }
+  @keyframes sh { to { background-position: -200% 0; } }
+  .empty { text-align: center; color: var(--muted); padding: 48px 16px; border: 1px dashed var(--line); border-radius: 14px; }
+  .empty .big { font-size: 40px; }
+  .danger-link { background: none; border: 0; color: var(--muted); font-size: 13px; margin-top: 32px; padding: 0; }
+  .danger-link:hover { color: var(--danger); }
+  dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--ink); padding: 20px; width: min(520px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  dialog label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  dialog input, dialog textarea { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  dialog .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; }
+    aside { border-right: 0; border-bottom: 1px solid var(--line); padding: 12px 16px; flex-direction: row; gap: 6px; overflow-x: auto; align-items: center; }
+    .brand { margin: 0 12px 0 0; font-size: 20px; white-space: nowrap; }
+    .cat { width: auto; white-space: nowrap; }
+    .cat .count { display: none; }
+    .ghost { width: auto; margin: 0; white-space: nowrap; }
+    .side-foot { margin: 0 0 0 auto; padding: 0; flex-direction: row; white-space: nowrap; align-items: center; gap: 12px; }
+    main { padding: 20px 16px; }
+    .gift { grid-template-columns: 72px 1fr; }
+    .thumb { width: 72px; height: 72px; }
+    .right { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: center; text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 1. Password gate -->
+<div class="gate" id="lock" hidden>
+  <form class="gate-card" id="lockForm">
+    <h1>🎁 Gift Ideas</h1>
+    <p>This list is private. Enter the password.</p>
+    <input type="password" id="pw" placeholder="Password" autocomplete="current-password" autofocus />
+    <label><input type="checkbox" id="remember" checked /> Remember this device</label>
+    <button class="primary" id="unlockBtn">Unlock</button>
+    <div class="err" id="lockErr"></div>
+  </form>
+</div>
+
+<!-- 2. Connect Puter (AI + private storage) -->
+<div class="gate" id="connect" hidden>
+  <div class="gate-card">
+    <h1>One more step</h1>
+    <p>Gift lists are saved privately in your Puter account (so they sync across your devices), and Puter runs the AI. No API key needed.</p>
+    <button class="primary" id="connectBtn">Connect Puter</button>
+    <div class="err" id="connectErr"></div>
+  </div>
+</div>
+
+<!-- 3. App -->
+<div class="app" id="app" hidden>
+  <aside id="sidebar"></aside>
+  <main id="main"></main>
+</div>
+
+<dialog id="edit">
+  <form method="dialog" id="editForm">
+    <strong>Edit gift</strong>
+    <label>Name</label><input name="name" />
+    <label>Short description</label><textarea name="description" rows="3"></textarea>
+    <label>Estimated price</label><input name="price" placeholder="$49" />
+    <label>Picture URL</label><input name="image" />
+    <label>Where to buy (one per line: Store | URL)</label><textarea name="links" rows="3"></textarea>
+    <div class="row"><button value="cancel" class="icon">Cancel</button><button value="save" class="primary">Save</button></div>
+  </form>
+</dialog>
+
+<script src="https://js.puter.com/v2/"></script>
+<script>
+// ---------- config ----------
+// Password is stored only as a salted PBKDF2-SHA256 hash.
+const PW = { salt: "c0d4c82dba63a1cdfd5c1f8122051fd3", hash: "371b4f804319fd65e3a9d075ba11723cdbc3afb721186484e9496db577c23695", iter: 310000 };
+// Puter models: a cheap model with live web search first, Claude as the fallback.
+const MODELS = { search: "gpt-5.4-mini", fallback: "claude-sonnet-5-5" };
+const KV_KEY = "gift-db-v1";
+const UNLOCK_KEY = "gift-unlock";
+
+const $ = (s) => document.querySelector(s);
+const esc = (s = "") => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const rid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+const ls = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} } };
+const show = (id) => ["lock", "connect", "app"].forEach((x) => ($("#" + x).hidden = x !== id));
+
+// ---------- 1. password ----------
+async function hashPw(pw) {
+  const hex = (s) => new Uint8Array(s.match(/../g).map((h) => parseInt(h, 16)));
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: hex(PW.salt), iterations: PW.iter, hash: "SHA-256" }, base, 256);
+  return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+$("#lockForm").onsubmit = async (e) => {
+  e.preventDefault();
+  $("#unlockBtn").disabled = true; $("#lockErr").textContent = "";
+  const h = await hashPw($("#pw").value);
+  $("#unlockBtn").disabled = false;
+  if (h !== PW.hash) { $("#lockErr").textContent = "Wrong password."; $("#pw").select(); return; }
+  if ($("#remember").checked) ls.set(UNLOCK_KEY, h);
+  sessionStorage.setItem(UNLOCK_KEY, h);
+  afterUnlock();
+};
+function lockNow() { ls.set(UNLOCK_KEY, null); sessionStorage.removeItem(UNLOCK_KEY); location.reload(); }
+
+// ---------- 2. puter ----------
+function afterUnlock() {
+  if (puter.auth.isSignedIn()) return start();
+  show("connect");
+}
+$("#connectBtn").onclick = async () => {
+  $("#connectErr").textContent = "";
+  try { await puter.auth.signIn(); start(); }
+  catch (e) { $("#connectErr").textContent = e?.error === "popup_blocked" || e?.code === "popup_blocked" ? "Your browser blocked the sign-in popup. Allow popups for this site and try again." : "Sign-in didn't finish. Try again."; }
+};
+
+// ---------- storage (Puter KV, private to your account) ----------
+let db = null, sel = { cat: null, prof: null }, saveTimer = null, saveState = "ok";
+function seed() {
+  const p = (name, special = false) => ({ id: rid(), name, special, items: [] });
+  return { categories: [
+    { id: rid(), name: "Hanukkah", emoji: "🕎", profiles: [p("Me", true), p("Emma"), p("Andrew"), p("Mom"), p("Dad")] },
+    { id: rid(), name: "Birthdays", emoji: "🎂", profiles: [] },
+  ] };
+}
+async function start() {
+  show("app");
+  $("#main").innerHTML = `<p class="sub">Loading your lists…</p>`;
+  try {
+    db = await puter.kv.get(KV_KEY);
+    if (!db || !db.categories) { db = seed(); await puter.kv.set(KV_KEY, db); }
+  } catch (e) { $("#main").innerHTML = `<div class="empty">Couldn't load your lists from Puter (${esc(e?.message || e?.error || "unknown error")}). Reload to try again.</div>`; return; }
+  try { Object.assign(sel, JSON.parse(ls.get("gift-sel") || "{}")); } catch {}
+  fixSel(); render(); runQueue();
+  // Pick up changes made on another device when you come back to this tab.
+  addEventListener("focus", async () => {
+    if (saveTimer || queueBusy) return;
+    try { const fresh = await puter.kv.get(KV_KEY); if (fresh?.categories) { db = fresh; fixSel(); render(); } } catch {}
+  });
+}
+function save() {
+  saveState = "busy"; renderStatus();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    saveTimer = null;
+    try { await puter.kv.set(KV_KEY, db); saveState = "ok"; } catch (e) { saveState = "bad"; console.error(e); }
+    renderStatus();
+  }, 500);
+}
+
+// ---------- helpers ----------
+const cats = () => db.categories;
+const currentCat = () => cats().find((c) => c.id === sel.cat);
+const currentProf = () => currentCat()?.profiles.find((p) => p.id === sel.prof);
+function fixSel() {
+  if (!currentCat()) sel.cat = cats()[0]?.id;
+  if (!currentProf()) sel.prof = currentCat()?.profiles[0]?.id;
+}
+function select(cat, prof) { sel.cat = cat; sel.prof = prof; ls.set("gift-sel", JSON.stringify(sel)); render(); }
+function findItem(id) { for (const c of cats()) for (const p of c.profiles) { const i = p.items.find((x) => x.id === id); if (i) return { c, p, i }; } }
+function priceNum(p) { const m = String(p || "").replace(/,/g, "").match(/\d+(\.\d+)?/g); if (!m) return 0; const n = m.map(Number); return n.length > 1 ? (n[0] + n[1]) / 2 : n[0]; }
+const initials = (n) => n.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return "Store"; } };
+function asUrl(input) {
+  if (/\s/.test(input)) return null;
+  for (const c of [input, "https://" + input]) { try { const u = new URL(c); if (/^https?:$/.test(u.protocol) && u.hostname.includes(".")) return u.href; } catch {} }
+  return null;
+}
+
+// ---------- AI synthesis ----------
+const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error(what + " timed out")), ms))]);
+
+async function readPage(url) {
+  const res = await withTimeout(puter.net.fetch(url), 20000, "Reading the page");
+  const html = (await res.text()).slice(0, 2_000_000);
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const meta = (k) => doc.querySelector(`meta[property="${k}"],meta[name="${k}"],meta[itemprop="${k}"]`)?.getAttribute("content")?.trim() || null;
+  let ld = null;
+  const walk = (n) => { if (!n || typeof n !== "object") return null; if (Array.isArray(n)) { for (const x of n) { const r = walk(x); if (r) return r; } return null; }
+    if ([].concat(n["@type"] || []).some((t) => /product/i.test(t))) return n; return walk(n["@graph"]) || walk(n.mainEntity); };
+  for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) { try { ld = walk(JSON.parse(s.textContent)); if (ld) break; } catch {} }
+  let price = null;
+  if (ld?.offers) { const o = [].concat(ld.offers)[0]; const a = o?.price ?? o?.lowPrice; if (a != null) price = (o.priceCurrency && o.priceCurrency !== "USD" ? o.priceCurrency + " " : "$") + a; }
+  const amt = meta("product:price:amount") || meta("og:price:amount"); if (!price && amt) price = "$" + amt;
+  let image = ld?.image ? [].concat(ld.image)[0] : null; if (image && typeof image === "object") image = image.url || image.contentUrl;
+  image = image || meta("og:image") || meta("twitter:image");
+  try { image = image ? new URL(image, url).href : null; } catch { image = null; }
+  doc.querySelectorAll("script,style,noscript,svg").forEach((n) => n.remove());
+  return {
+    name: ld?.name || meta("og:title") || doc.title || null,
+    description: ld?.description || meta("og:description") || meta("description") || null,
+    image, price,
+    text: (doc.body?.textContent || "").replace(/\s+/g, " ").trim().slice(0, 6000),
+  };
+}
+
+const SPEC = `Reply with ONLY a JSON object, no other text:
+{"name":"short clear product name","description":"one or two short sentences: what it is and why it's a nice gift","price":"estimated typical price, e.g. \\"$49\\" or \\"$40–60\\"","image":"direct image URL of the product or null","links":[{"store":"Store name","url":"https://...","price":"$.. or null"}]}
+Give 1 to 3 links, best first, as direct product pages from reputable retailers (best price or availability). Never invent URLs: only use ones you found.`;
+
+function buildPrompt(item, page, forWhom) {
+  if (item.sourceUrl) return `Someone is building a gift list (gift for: ${forWhom}). They pasted this link: ${item.sourceUrl}
+
+What the page itself says (may be empty if the site blocks readers):
+${JSON.stringify(page ? { name: page.name, description: page.description, price: page.price } : null)}
+Page text excerpt: """${page?.text?.slice(0, 4000) || ""}"""
+
+Identify the exact product. Search the web for its current price and the best places to buy it (the original store counts).
+${SPEC}`;
+  return `Someone is building a gift list (gift for: ${forWhom}). They typed this gift idea:
+"""${item.query}"""
+
+Turn it into one specific, real product that best matches (if vague, choose a popular, well-reviewed option that fits). Search the web for its current price and the best places to buy it.
+${SPEC}`;
+}
+
+async function askAI(prompt, useSearch) {
+  const opts = useSearch ? { model: MODELS.search, tools: [{ type: "web_search" }] } : { model: MODELS.fallback, normalize: true };
+  const r = await withTimeout(puter.ai.chat(prompt, opts), 120000, "The AI");
+  let c = r?.message?.content;
+  if (Array.isArray(c)) c = c.map((b) => b?.text || "").join("\n");
+  if (typeof c !== "string") c = String(r ?? "");
+  const m = c.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error("AI reply had no JSON");
+  return JSON.parse(m[0]);
+}
+
+async function synthesize(item, forWhom) {
+  let page = null;
+  if (item.sourceUrl) { try { page = await readPage(item.sourceUrl); } catch (e) { console.warn("page read failed", e); } }
+  const prompt = buildPrompt(item, page, forWhom);
+  let ai = null, err = null;
+  try { ai = await askAI(prompt, true); }
+  catch (e1) { console.warn("search model failed", e1); try { ai = await askAI(prompt, false); } catch (e2) { err = e2; } }
+
+  const links = (Array.isArray(ai?.links) ? ai.links : []).filter((l) => /^https?:\/\//.test(l?.url || "")).slice(0, 3);
+  if (!links.length) links.push(item.sourceUrl
+    ? { store: host(item.sourceUrl), url: item.sourceUrl, price: page?.price || null }
+    : { store: "Search Google Shopping", url: "https://www.google.com/search?tbm=shop&q=" + encodeURIComponent(item.query), price: null });
+
+  // Real page images beat AI-guessed ones: try the source page, then the top store page.
+  let image = page?.image || null;
+  if (!image && links[0] && !links[0].url.includes("google.com/search")) { try { image = (await readPage(links[0].url)).image; } catch {} }
+  image = image || ai?.image || null;
+
+  return {
+    name: String(ai?.name || page?.name || item.query || host(item.sourceUrl)).slice(0, 120),
+    description: String(ai?.description || page?.description || "").slice(0, 400),
+    price: String(ai?.price || page?.price || ""),
+    image, links,
+    error: err ? `AI couldn't finish (${err.message || err}). Try ↻ or edit by hand.` : null,
+  };
+}
+
+// One gift at a time keeps us well under Puter's free-tier rate limits.
+let queueBusy = false;
+async function runQueue() {
+  if (queueBusy) return;
+  queueBusy = true;
+  try {
+    for (;;) {
+      let next = null;
+      for (const c of cats()) for (const p of c.profiles) for (const i of p.items) if (!next && i.status === "processing") next = { c, p, i };
+      if (!next) break;
+      const who = next.p.special ? "me (my own wishlist)" : `${next.p.name} (${next.c.name})`;
+      let result;
+      try { result = await synthesize(next.i, who); }
+      catch (e) { result = { error: "Something went wrong: " + (e.message || e) }; }
+      const live = findItem(next.i.id)?.i; // may have been deleted meanwhile
+      if (live) { Object.assign(live, result, { status: "ready" }); save(); render(); }
+    }
+  } finally { queueBusy = false; }
+}
+
+// ---------- render ----------
+function renderStatus() {
+  const el = $("#syncStatus"); if (!el) return;
+  el.innerHTML = saveState === "busy" ? `<span class="dot busy"></span>Saving…` : saveState === "bad" ? `<span class="dot bad"></span>Couldn't save` : `<span class="dot"></span>Saved to Puter`;
+}
+
+function render() {
+  const sb = $("#sidebar");
+  sb.innerHTML = `<div class="brand">Gift <span>Ideas</span></div>` +
+    cats().map((c) => {
+      const n = c.profiles.reduce((s, p) => s + p.items.length, 0);
+      return `<button class="cat ${c.id === sel.cat ? "active" : ""}" data-cat="${c.id}"><span>${esc(c.emoji || "🎁")}</span>${esc(c.name)}<span class="count">${n}</span></button>`;
+    }).join("") + `<button class="ghost" id="addCat">+ New category</button>
+    <div class="side-foot"><span id="syncStatus"></span><button id="lockBtn">🔒 Lock</button></div>`;
+  sb.querySelectorAll("[data-cat]").forEach((b) => (b.onclick = () => select(b.dataset.cat, cats().find((c) => c.id === b.dataset.cat).profiles[0]?.id)));
+  $("#addCat").onclick = addCategory;
+  $("#lockBtn").onclick = lockNow;
+  renderStatus();
+
+  const m = $("#main");
+  const cat = currentCat();
+  if (!cat) { m.innerHTML = `<div class="empty">No categories yet.</div>`; return; }
+  const prof = currentProf();
+  m.className = prof?.special ? "special-theme" : "";
+  m.innerHTML = `
+    <h1 class="cat-title">${esc(cat.emoji || "🎁")} ${esc(cat.name)}</h1>
+    <p class="sub">${cat.profiles.length ? "Pick a person, then add gift ideas." : "Add the people you're shopping for."}</p>
+    <div class="profiles">
+      ${cat.profiles.map((p) => `<button class="chip ${p.special ? "special" : ""} ${p.id === sel.prof ? "active" : ""}" data-prof="${p.id}">
+        <span class="av">${p.special ? "★" : esc(initials(p.name))}</span>${esc(p.name)} <small>${p.items.length}</small></button>`).join("")}
+      <button class="chip add" id="addProf">+ Add person</button>
+    </div>
+    ${prof ? profileView(prof) : ""}`;
+  m.querySelectorAll("[data-prof]").forEach((b) => (b.onclick = () => select(cat.id, b.dataset.prof)));
+  $("#addProf").onclick = () => addProfile(cat);
+  if (prof) wireProfile(prof, cat);
+}
+
+function profileView(p) {
+  const total = p.items.filter((i) => !i.purchased).reduce((s, i) => s + priceNum(i.price), 0);
+  const bought = p.items.filter((i) => i.purchased).length;
+  return `
+    <div class="profile-head">
+      <h2>${p.special ? "My wishlist" : esc(p.name)}${p.special ? `<span class="badge">★ Just for me</span>` : ""}</h2>
+      <div class="stats"><b>${p.items.length}</b> ideas · <b>${bought}</b> bought · about <b>$${Math.round(total).toLocaleString()}</b> left</div>
+    </div>
+    <form class="add-link" id="addForm">
+      <input id="gift" type="text" required placeholder="Paste a product link, or describe a gift (e.g. &quot;cozy wool slippers, size 9&quot;)…" autocomplete="off" />
+      <button class="primary" id="addBtn">Add gift</button>
+    </form>
+    <p class="hint">AI finds the product, writes a quick description, estimates the price and searches for the best places to buy. It takes about 10–40 seconds per gift.</p>
+    <div class="list">
+      ${p.items.length ? p.items.map(giftRow).join("") : `<div class="empty"><div class="big">${p.special ? "✨" : "🎁"}</div>No gifts yet. Paste a link or describe a gift above.</div>`}
+    </div>
+    ${p.special ? "" : `<button class="danger-link" id="delProf">Remove ${esc(p.name)} from this category</button>`}`;
+}
+
+function giftRow(i) {
+  if (i.status === "processing") return `
+    <div class="gift loading">
+      <div class="thumb">🎁</div>
+      <div><div class="gname">${i.sourceUrl ? `Reading ${esc(host(i.sourceUrl))}…` : `Finding “${esc(i.query)}”…`}</div><div class="shimmer" style="width:70%"></div><div class="shimmer" style="width:45%"></div>
+      ${i.sourceUrl ? `<div class="links"><a href="${esc(i.sourceUrl)}" target="_blank" rel="noopener">Original link</a></div>` : ""}</div>
+      <div class="right"><div class="actions"><button class="icon" data-del="${i.id}" title="Remove">✕</button></div></div>
+    </div>`;
+  return `
+    <div class="gift ${i.purchased ? "bought" : ""}">
+      <div class="thumb">${i.image ? `<img src="${esc(i.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.textContent='🎁'">` : "🎁"}</div>
+      <div>
+        <div class="gname">${esc(i.name)}</div>
+        ${i.description ? `<p class="gdesc">${esc(i.description)}</p>` : ""}
+        <div class="links">${(i.links || []).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.store || "Store")}${l.price ? `<span class="lp">${esc(l.price)}</span>` : ""}</a>`).join("")}</div>
+        ${i.error ? `<div class="note">${esc(i.error)}</div>` : ""}
+      </div>
+      <div class="right">
+        <div class="price">${esc(i.price || "—")}<small>estimated</small></div>
+        <div class="actions">
+          <button class="icon ${i.purchased ? "on" : ""}" data-buy="${i.id}">${i.purchased ? "✓ Bought" : "Mark bought"}</button>
+          <button class="icon" data-edit="${i.id}">Edit</button>
+          <button class="icon" data-retry="${i.id}" title="Look it up again">↻</button>
+          <button class="icon" data-del="${i.id}" title="Remove">✕</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function wireProfile(p, cat) {
+  $("#addForm").onsubmit = (e) => {
+    e.preventDefault();
+    const input = $("#gift").value.trim(); if (!input) return;
+    const url = asUrl(input);
+    p.items.unshift({ id: rid(), sourceUrl: url, query: url ? null : input.slice(0, 500), name: input.slice(0, 80), description: "", price: "", image: null, links: [], status: "processing", purchased: false, addedAt: new Date().toISOString() });
+    save(); render(); $("#gift").focus(); runQueue();
+  };
+  const item = (id) => p.items.find((i) => i.id === id);
+  document.querySelectorAll("[data-del]").forEach((b) => (b.onclick = () => {
+    if (!confirm("Remove this gift?")) return;
+    p.items = p.items.filter((i) => i.id !== b.dataset.del); save(); render();
+  }));
+  document.querySelectorAll("[data-buy]").forEach((b) => (b.onclick = () => { const i = item(b.dataset.buy); i.purchased = !i.purchased; save(); render(); }));
+  document.querySelectorAll("[data-retry]").forEach((b) => (b.onclick = () => { const i = item(b.dataset.retry); i.status = "processing"; i.error = null; save(); render(); runQueue(); }));
+  document.querySelectorAll("[data-edit]").forEach((b) => (b.onclick = () => openEdit(item(b.dataset.edit))));
+  const del = $("#delProf");
+  if (del) del.onclick = () => {
+    if (!confirm(`Remove ${p.name} and their ${p.items.length} gift ideas?`)) return;
+    cat.profiles = cat.profiles.filter((x) => x.id !== p.id); save(); select(cat.id, cat.profiles[0]?.id);
+  };
+}
+
+function openEdit(i) {
+  const f = $("#editForm"), d = $("#edit");
+  f.name.value = i.name || ""; f.description.value = i.description || ""; f.price.value = i.price || ""; f.image.value = i.image || "";
+  f.links.value = (i.links || []).map((l) => `${l.store} | ${l.url}`).join("\n");
+  d.onclose = () => {
+    if (d.returnValue !== "save") return;
+    const links = f.links.value.split("\n").map((line) => { const [a, b] = line.split("|").map((s) => s.trim()); return b ? { store: a, url: b } : a ? { store: host(a), url: a } : null; }).filter((l) => l && /^https?:\/\//.test(l.url));
+    Object.assign(i, { name: f.name.value, description: f.description.value, price: f.price.value, image: f.image.value || null, links, error: null });
+    save(); render();
+  };
+  d.showModal();
+}
+
+function addCategory() {
+  const name = prompt("Category name (e.g. Anniversary, Graduation):")?.trim(); if (!name) return;
+  const c = { id: rid(), name, emoji: "🎁", profiles: [] }; cats().push(c); save(); select(c.id, null);
+}
+function addProfile(cat) {
+  const name = prompt(`Who are you shopping for in ${cat.name}?`)?.trim(); if (!name) return;
+  const p = { id: rid(), name, special: false, items: [] }; cat.profiles.push(p); save(); select(cat.id, p.id);
+}
+
+// ---------- boot ----------
+const remembered = ls.get(UNLOCK_KEY) || sessionStorage.getItem(UNLOCK_KEY);
+if (remembered === PW.hash) afterUnlock(); else show("lock");
+</script>
+</body>
+</html>
