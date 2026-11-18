@@ -3,7 +3,8 @@
 A private gift-shopping list. Paste a product link or describe a gift; AI (Google Gemini, free tier)
 finds the product, writes a short description, estimates the price and adds places to buy.
 
-- `index.html`: the site (GitHub Pages).
+- `web/`: the site's source (React, Tailwind, shadcn/ui). `cd web && npm install && npm run build`
+  writes the built pages (`index.html`, `hanukkah/`, `birthdays/`, `assets/`) to the repo root, which GitHub Pages serves.
 - `worker/`: a Cloudflare Worker that checks the password, stores the lists (Workers KV) and calls Gemini.
   Secrets live in Cloudflare, never in this repo.
 

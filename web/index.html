@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Gift Ideas</title>
+    <script>
+      // Follow the system light/dark setting.
+      (function () {
+        var m = matchMedia("(prefers-color-scheme: dark)");
+        var set = function () { document.documentElement.classList.toggle("dark", m.matches); };
+        set(); m.addEventListener("change", set);
+      })();
+    </script>
+  </head>
+  <body data-page="home">
+    <div id="root"></div>
+    <script type="module" src="./src/main.tsx"></script>
+  </body>
+</html>
