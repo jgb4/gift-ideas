@@ -92,7 +92,7 @@ const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } 
 
 async function readPage(url) {
   const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "text/html,*/*", "Accept-Language": "en-US,en" }, redirect: "follow", signal: AbortSignal.timeout(12000) });
-  const out = { ok: res.ok, finalUrl: res.url || url, metas: {}, ld: [], title: "", text: "" };
+  const out = { ok: res.ok, status: res.status, finalUrl: res.url || url, metas: {}, ld: [], title: "", text: "" };
   if (!(res.headers.get("content-type") || "").includes("html")) return finish(out);
   await new HTMLRewriter()
     .on("meta", { element(e) {
@@ -119,11 +119,14 @@ function finish(o) {
   let price = null;
   if (ld?.offers) { const f = [].concat(ld.offers)[0]; const a = f?.price ?? f?.lowPrice; if (a != null) price = (f.priceCurrency && f.priceCurrency !== "USD" ? f.priceCurrency + " " : "$") + a; }
   const amt = m["product:price:amount"] || m["og:price:amount"]; if (!price && amt) price = "$" + amt;
+  // Out of stock / sold out / discontinued, from the page's structured data. Pre-orders count as available.
+  const avail = String([].concat(ld?.offers || []).map((f) => f?.availability).join(" ") + " " + (m["product:availability"] || m["og:availability"] || ""));
+  const soldOut = /outofstock|out of stock|soldout|sold out|discontinued/i.test(avail) && !/instock|in stock|preorder|backorder|limitedavailability/i.test(avail);
   let image = ld?.image ? [].concat(ld.image)[0] : null; if (image && typeof image === "object") image = image.url || image.contentUrl;
   image = image || m["og:image"] || m["twitter:image"] || null;
   try { image = image ? new URL(image, o.finalUrl).href : null; } catch { image = null; }
   return {
-    ok: o.ok, finalUrl: o.finalUrl, image, price,
+    ok: o.ok, status: o.status, finalUrl: o.finalUrl, image, price, soldOut,
     name: decode(ld?.name || m["og:title"] || o.title || "") || null,
     description: decode(ld?.description || m["og:description"] || m["description"] || "") || null,
     isProduct: !!(ld || m["og:type"] === "product" || price),
@@ -266,8 +269,8 @@ Turn it into one specific, real, currently sold product that best matches.
 - Words like "best", "top", "nicest", "premium", "fanciest" mean the brand's top-of-the-line / flagship model, not its most popular or cheapest one.
 - If the idea is vague with no brand, pick a popular, well-reviewed option that fits.`;
   const tail = withSearch
-    ? `Search the web for the current price and the best places to buy it (reputable retailers, best price or availability).
-Every link must be a direct product page for this exact model, never a homepage, category or search page. If the brand sells it on its own site, list that product page first.
+    ? `Search the web for the current price and the best places to buy it: reputable retailers that have it in stock right now, best price first. Skip sold-out, unavailable or discontinued listings.
+Every link must be a live, in-stock, direct product page for this exact model, never a homepage, category or search page. If the brand sells it on its own site, list that product page first.
 Reply with ONLY a JSON object:
 { ${FIELDS}
   "image": "direct product image URL you found, or null",
@@ -281,6 +284,16 @@ Reply with ONLY a JSON object:
   return `Someone is building a gift list (gift for: ${forWhom}).\n${what}\n${tail}`;
 }
 
+// Does a page's title look like the same product? Nearly all of the name's words must appear
+// (brand words alone aren't enough: "Elsa Peretti Open Heart Pendant" is not the Bottle Pendant).
+function sameItem(name, pageName) {
+  const words = (t) => String(t || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9 ]+/g, " ").split(/\s+/)
+    .filter((w) => w.length > 2 && !/^(the|and|for|with|in|of|by|new|set|size|color|colour)$/.test(w));
+  const want = [...new Set(words(name))], have = new Set(words(pageName));
+  if (!want.length || !have.size) return false;
+  return want.filter((w) => have.has(w)).length / want.length >= 0.8;
+}
+
 // Sites that block page readers; skip them when hunting for a photo.
 const BLOCKS_READERS = /(^|\.)(amazon|walmart|target|google|ebay)\./i;
 
@@ -292,7 +305,7 @@ async function synthesize(input, forWhom, mode, env) {
   if (url) { try { page = await readPage(url); } catch {} }
   const pageIsGood = !!(page?.ok && page.isProduct && page.name);
 
-  const wantSearch = mode === "stores" || !url || !pageIsGood;
+  const wantSearch = mode === "stores" || !url || !pageIsGood || page.soldOut;
   let ai = null, usedSearch = false, error = null, note = null, queries = 0;
   if (wantSearch && (await canSearch(env))) {
     try { ai = await gemini(env, prompt(input, url, page, forWhom, true), true); usedSearch = true; queries = ai.__queries || 0; console.log("search ok", queries, "queries"); await countSearch(env, queries); }
@@ -308,31 +321,38 @@ async function synthesize(input, forWhom, mode, env) {
   const add = (l) => { if (l?.url && /^https?:\/\//.test(l.url) && !links.some((x) => host(x.url) === host(l.url))) links.push(l); };
   if (url) add({ store: host(page?.finalUrl || url), url: page?.finalUrl || url, price: page?.price || null });
 
-  let image = page?.image || null;
-  let checks = 0;
-  const tryPage = async (u, keepLink) => {
-    if (checks >= 4 || !asUrl(u) || BLOCKS_READERS.test(host(u))) return;
-    checks++;
-    try {
-      const p = await readPage(u);
-      if (!(p.ok && p.isProduct && new URL(p.finalUrl).pathname.length > 1)) return;
-      if (keepLink) add({ store: host(p.finalUrl), url: p.finalUrl, price: p.price });
-      if (!image && p.image) image = p.image;
-      if (!links.find((l) => host(l.url) === host(p.finalUrl))?.price && p.price) { const l = links.find((x) => host(x.url) === host(p.finalUrl)); if (l) l.price = p.price; }
-    } catch {}
+  // Every link is opened before it's kept. A link survives only if it's a live product page
+  // for this item (verified), or if the store blocks readers so we can't tell (unverified, kept
+  // only as a last resort). Dead pages, redirects to a category/homepage, and pages for a
+  // different product are dropped. Photos come only from verified pages, never from the AI.
+  let image = pageIsGood ? page.image : null; // the page you pasted is the item itself
+  const candidates = [];
+  const seen = new Set(links.map((l) => host(l.url)));
+  const push = (u, store, price) => {
+    if (candidates.length >= 4 || !asUrl(u) || seen.has(host(u))) return;
+    try { if (new URL(u).pathname.replace(/\/+$/, "") === "") return; } catch { return; }
+    seen.add(host(u)); candidates.push({ url: u, store: store || host(u), price: price || null });
   };
-  if (usedSearch) {
-    const isHome = (u) => { try { return new URL(u).pathname.replace(/\/+$/, "") === ""; } catch { return true; } };
-    for (const l of Array.isArray(ai?.links) ? ai.links : []) if (!isHome(l.url)) add({ store: l.store || host(l.url), url: l.url, price: l.price || null });
-    for (const l of [...links]) { if (image) break; await tryPage(l.url, false); }
-    image = image || ai?.image || null;
-  } else {
-    // No live search: only keep guessed pages that really exist and look like products.
-    for (const u of (Array.isArray(ai?.productUrls) ? ai.productUrls : []).slice(0, 3)) {
-      if (links.length >= 2 && image) break;
-      await tryPage(u, true);
+  if (usedSearch) for (const l of Array.isArray(ai?.links) ? ai.links : []) push(l?.url, l?.store, l?.price);
+  else for (const u of Array.isArray(ai?.productUrls) ? ai.productUrls : []) push(u);
+
+  const checked = await Promise.all(candidates.map(async (c) => {
+    if (BLOCKS_READERS.test(host(c.url))) return { ...c, verified: false };
+    let p;
+    try { p = await readPage(c.url); } catch { return { ...c, verified: false } } // timeout etc.
+    if (p.ok) {
+      const real = p.isProduct && !p.soldOut && new URL(p.finalUrl).pathname.replace(/\/+$/, "") !== "" && sameItem(name, p.name);
+      return real ? { store: c.store, url: p.finalUrl, price: p.price || c.price, verified: true, image: p.image } : null;
     }
-  }
+    if ([404, 410].includes(p.status)) return null; // dead end
+    return { ...c, verified: false }; // 403/429/5xx: bot wall, can't check
+  }));
+  const good = checked.filter((c) => c?.verified);
+  for (const c of good) { if (!image && c.image) image = c.image; delete c.image; }
+  // Search-guessed URLs on sites we can't read are only kept when nothing could be verified.
+  const fallback = good.length || links.length ? [] : checked.filter((c) => c && !c.verified && usedSearch);
+  if (links[0]) links[0].verified = pageIsGood && !page.soldOut;
+  links.push(...good, ...fallback);
 
   return {
     name,
@@ -343,7 +363,7 @@ async function synthesize(input, forWhom, mode, env) {
     sourceUrl: url,
     searched: usedSearch,
     searchQueries: queries,
-    error: error || note,
+    error: error || note || (url && page?.soldOut ? "The link you pasted shows it as sold out." : null),
   };
 }
 

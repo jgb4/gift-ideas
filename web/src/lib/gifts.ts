@@ -1,6 +1,6 @@
 // Data model, API client and small helpers shared by the pages.
 
-export type Link = { store: string; url: string; price?: string }
+export type Link = { store: string; url: string; price?: string | null; verified?: boolean }
 export type Gift = {
   id: string
   sourceUrl: string | null
@@ -95,10 +95,12 @@ export function asUrl(input: string) {
   return null
 }
 
-// The one link to show: the cheapest real store, ignoring search pages and prices so low
+// The one link to show: the cheapest confirmed store, ignoring search pages and prices so low
 // they're likely wrong (under half the priciest one). Ties keep the AI's best-first order.
 export function bestLink(gift: Gift): Link | null {
-  const links = (gift.links || []).filter((l) => !/amazon\.com\/s\?|google\.com\/search/.test(l.url))
+  let links = (gift.links || []).filter((l) => !/amazon\.com\/s\?|google\.com\/search/.test(l.url))
+  // Links the server opened and confirmed beat ones it couldn't check.
+  if (links.some((l) => l.verified)) links = links.filter((l) => l.verified)
   const priced = links.filter((l) => priceNum(l.price || "") > 0)
   const top = Math.max(0, ...priced.map((l) => priceNum(l.price!)))
   const sane = priced.filter((l) => priceNum(l.price!) >= top / 2)
