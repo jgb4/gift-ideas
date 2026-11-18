@@ -161,8 +161,6 @@ async function gemini(env, prompt, useSearch) {
   for (const s of j.steps || []) if (s.type === "google_search_call") queries += Array.isArray(s.arguments?.queries) ? s.arguments.queries.length : 1;
   for (const c of j.candidates || []) queries += c.groundingMetadata?.webSearchQueries?.length || 0;
   out.__queries = queries;
-  // Pages Google search actually returned, to tell real links from made-up ones (logged for now).
-  console.log("steps", (j.steps || []).map((s) => s.type).join(","), "| urls", JSON.stringify(JSON.stringify(j.steps || []).match(/https?:[^"\\]+/g)?.slice(0, 15) || []));
   return out;
 }
 
@@ -180,10 +178,9 @@ async function photoShows(env, url, name) {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
       body: JSON.stringify({ contents: [{ parts: [
-        { text: `Is this a product photo of: "${name}"?
-Answer "yes" only if the photo clearly shows this specific item: the right kind of product with the shape, motif, color and material the name describes.
-Answer "no" for a different design or shape, a different color or material, a similar-but-different product, or a logo, banner, collage, lifestyle shot or placeholder.
-Don't reject it only because you don't recognize a person, team, player, number or release; judge the item itself.
+        { text: `A shop listing says this photo shows: "${name}".
+Judge only what you can see; don't use outside knowledge about people, teams or release dates.
+Answer "no" if it's clearly the wrong kind of item, a different color or material than the name says, shows a different design than the name describes, or is a logo, banner, collage or placeholder. Otherwise answer "yes".
 Answer only yes or no.` },
         { inline_data: { mime_type: type, data: btoa(bin) } },
       ] }] }),
