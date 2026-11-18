@@ -158,13 +158,26 @@ body[data-holiday="Hanukkah"] {
     --input: oklch(0.78 0.09 240);
     --ring: oklch(0.6 0.14 250);
     --brand: oklch(0.48 0.18 256);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' fill='none' stroke='%233a6cc2' stroke-opacity='.2' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg transform='translate(52 56)'%3E%3Cpath d='M0-14 12.1 7H-12.1ZM0 14 12.1-7H-12.1Z'/%3E%3C/g%3E%3Cg transform='translate(190 66)'%3E%3Cpath d='M0-20V-12M-10-12H10V4L0 16-10 4Z'/%3E%3C/g%3E%3Cg transform='translate(116 196)'%3E%3Cpath d='M-24 0H24M-24 0V-8M-18 0V-8M-12 0V-8M-6 0V-8M0 0V-12M6 0V-8M12 0V-8M18 0V-8M24 0V-8M0 0V14M-9 14H9'/%3E%3C/g%3E%3Cg transform='translate(226 214) scale(.55)'%3E%3Cpath d='M0-14 12.1 7H-12.1ZM0 14 12.1-7H-12.1Z'/%3E%3C/g%3E%3C/svg%3E");
-    background-size: 260px 260px;
-    background-attachment: fixed;
 }
 
-/* Birthdays: keeps the normal (black in dark mode) theme, framed by a thin
-   multicolor border around the window. */
+/* The icon pattern lives on its own layer behind the page and is masked out of
+   the centered content column (max-w-3xl = 48rem), so icons only show in the
+   side margins and never sit behind text. On narrow screens it's hidden. */
+body[data-holiday="Hanukkah"]::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    --edge: calc(50% - 25rem);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(var(--edge) - 2rem), transparent var(--edge), transparent calc(100% - var(--edge)), #000 calc(100% - var(--edge) + 2rem));
+    mask-image: linear-gradient(to right, #000 calc(var(--edge) - 2rem), transparent var(--edge), transparent calc(100% - var(--edge)), #000 calc(100% - var(--edge) + 2rem));
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' fill='none' stroke='%233a6cc2' stroke-opacity='.2' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg transform='translate(52 56)'%3E%3Cpath d='M0-14 12.1 7H-12.1ZM0 14 12.1-7H-12.1Z'/%3E%3C/g%3E%3Cg transform='translate(190 66)'%3E%3Cpath d='M0-20V-12M-10-12H10V4L0 16-10 4Z'/%3E%3C/g%3E%3Cg transform='translate(116 196)'%3E%3Cpath d='M-24 0H24M-24 0V-8M-18 0V-8M-12 0V-8M-6 0V-8M0 0V-12M6 0V-8M12 0V-8M18 0V-8M24 0V-8M0 0V14M-9 14H9'/%3E%3C/g%3E%3Cg transform='translate(226 214) scale(.55)'%3E%3Cpath d='M0-14 12.1 7H-12.1ZM0 14 12.1-7H-12.1Z'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 260px 260px;
+}
+
+/* Birthdays: always the white (light) theme (its page skips dark mode),
+   framed by a thin multicolor border around the window. */
 body[data-holiday="Birthdays"]::after {
     content: "";
     position: fixed;
