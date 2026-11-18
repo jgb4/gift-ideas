@@ -299,7 +299,7 @@ Turn it into one specific, real, currently sold product that best matches.
 Every link must be a live, in-stock, direct product page for this exact model, never a homepage, category or search page. If the brand sells it on its own site, list that product page first.
 Reply with ONLY a JSON object:
 { ${FIELDS}
-  "images": ["up to 3 direct image file URLs (.jpg/.png/.webp) showing this exact product, from listings you found: retailers, resale sites, the brand, press; best first"],
+  "images": ["up to 3 image URLs copied from the product listings you found for this exact item (same model, color, player), best first"],
   "links": [{"store": "Store name", "url": "https://...", "price": "$.. or null"}],
   "searchQuery": "short brand + model search query" }
 2 to 3 links from different stores, best first. For collectibles or out-of-print items, include a marketplace that has it (TCGplayer, eBay, StockX). Only URLs you actually found.`
@@ -335,7 +335,7 @@ function judgeLink(p, name) {
 }
 
 // Sites that block page readers; skip them when hunting for a photo.
-const BLOCKS_READERS = /(^|\.)(amazon|walmart|target|google|ebay)\./i;
+const BLOCKS_READERS = /(^|\.)(amazon|walmart|google)\./i;
 
 // mode "auto": search only when it adds something (typed ideas, or links whose page can't be read).
 // mode "stores": the "Find best stores" button, always searches if allowed.
@@ -383,22 +383,23 @@ async function synthesize(input, forWhom, mode, env) {
     const v = judgeLink(p, name);
     if (v === "drop") return null;
     if (v === "verified") return { store: c.store, url: p.finalUrl, price: p.price || c.price, verified: true, image: sameItem(name, p.name, 0.8) ? p.image : null };
-    // Not confirmable as a product page, but if the page plainly names this item, its photo is fine.
-    const photo = p?.ok && p.image && sameItem(name, p.name, 0.8) ? p.image : null;
-    return { ...c, url: p?.ok ? p.finalUrl : c.url, price: p?.price || c.price, verified: false, image: photo };
+    // Couldn't confirm the page, but its main photo is still worth showing Gemini.
+    return { ...c, url: p?.ok ? p.finalUrl : c.url, price: p?.price || c.price, verified: false, photo: p?.ok ? p.image : null };
   }));
   const good = checked.filter((c) => c?.verified);
   const maybe = checked.filter((c) => c && !c.verified);
-  for (const c of [...good, ...maybe]) { if (!image && c.image) image = c.image; delete c.image; }
+  for (const c of good) { if (!image && c.image) image = c.image; delete c.image; }
+  const pagePhotos = maybe.map((c) => c.photo).filter(Boolean);
+  for (const c of maybe) delete c.photo;
   if (links[0]) links[0].verified = pageIsGood && !page.soldOut;
   // Confirmed links first; ones we couldn't check (store blocks readers, or builds its page in the
   // browser) stay as backups. The page only shows a backup when nothing was confirmed.
   links.push(...good, ...maybe);
 
-  // Still no photo (stores block readers): try the AI's suggested photos, but only keep one that
-  // Gemini confirms, by looking at it, shows this item.
-  if (!image && ai) {
-    const urls = [...new Set([...(Array.isArray(ai.images) ? ai.images : []), ai.image].filter((u) => asUrl(String(u || ""))))].slice(0, 4);
+  // Still no photo: try photos from the listings we could read, then the AI's suggestions, and
+  // keep the first one Gemini confirms (by looking at it) shows this item.
+  if (!image) {
+    const urls = [...new Set([...pagePhotos, ...(Array.isArray(ai?.images) ? ai.images : []), ai?.image].filter((u) => asUrl(String(u || ""))))].slice(0, 6);
     for (const u of urls) { if (await photoShows(env, u, name)) { image = u; break; } }
   }
 
