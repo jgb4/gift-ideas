@@ -95,17 +95,17 @@ export function asUrl(input: string) {
   return null
 }
 
-// The one link to show: the cheapest confirmed store, ignoring search pages and prices so low
-// they're likely wrong (under half the priciest one). Ties keep the AI's best-first order.
+// The one link to show. If the server confirmed some links (page opens, same item, in stock),
+// pick the cheapest of those, ignoring prices under half the priciest (likely wrong). Otherwise
+// take the AI's first pick: the cheapest unchecked link is often an official store that's sold out.
 export function bestLink(gift: Gift): Link | null {
-  let links = (gift.links || []).filter((l) => !/amazon\.com\/s\?|google\.com\/search/.test(l.url))
-  // Links the server opened and confirmed beat ones it couldn't check.
-  if (links.some((l) => l.verified)) links = links.filter((l) => l.verified)
-  const priced = links.filter((l) => priceNum(l.price || "") > 0)
+  const links = (gift.links || []).filter((l) => !/amazon\.com\/s\?|google\.com\/search/.test(l.url))
+  const ok = links.filter((l) => l.verified)
+  const priced = ok.filter((l) => priceNum(l.price || "") > 0)
   const top = Math.max(0, ...priced.map((l) => priceNum(l.price!)))
   const sane = priced.filter((l) => priceNum(l.price!) >= top / 2)
   if (sane.length) return sane.reduce((a, b) => (priceNum(b.price!) < priceNum(a.price!) ? b : a))
-  return links[0] || (gift.sourceUrl ? { store: host(gift.sourceUrl), url: gift.sourceUrl } : null)
+  return ok[0] || links[0] || (gift.sourceUrl ? { store: host(gift.sourceUrl), url: gift.sourceUrl } : null)
 }
 
 // "$24.99" -> "$25", "$1,299.50" -> "$1,300"; ranges and whole numbers are left alone.

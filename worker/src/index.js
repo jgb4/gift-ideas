@@ -276,7 +276,7 @@ Reply with ONLY a JSON object:
   "image": "direct product image URL you found, or null",
   "links": [{"store": "Store name", "url": "https://...", "price": "$.. or null"}],
   "searchQuery": "short brand + model search query" }
-1 to 3 links, best first. Only URLs you actually found.`
+2 to 3 links from different stores, best first. For collectibles or out-of-print items, include a marketplace that has it (TCGplayer, eBay, StockX). Only URLs you actually found.`
     : `Reply with ONLY a JSON object:
 { ${FIELDS}
   "productUrls": ["up to 3 likely direct product page URLs: the brand's own shop first, then retailers like REI, Best Buy, Nordstrom, Uncommon Goods, Etsy"],
@@ -286,12 +286,26 @@ Reply with ONLY a JSON object:
 
 // Does a page's title look like the same product? Nearly all of the name's words must appear
 // (brand words alone aren't enough: "Elsa Peretti Open Heart Pendant" is not the Bottle Pendant).
-function sameItem(name, pageName) {
-  const words = (t) => String(t || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9 ]+/g, " ").split(/\s+/)
+function sameItem(name, pageName, need = 0.8) {
+  const words = (t) => String(t || "").toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "").replace(/[^a-z0-9 ]+/g, " ").split(/\s+/)
     .filter((w) => w.length > 2 && !/^(the|and|for|with|in|of|by|new|set|size|color|colour)$/.test(w));
   const want = [...new Set(words(name))], have = new Set(words(pageName));
   if (!want.length || !have.size) return false;
-  return want.filter((w) => have.has(w)).length / want.length >= 0.8;
+  return want.filter((w) => have.has(w)).length / want.length >= need;
+}
+
+// What opening a store link told us. Only drop a link on real evidence it's bad:
+// gone (404/410), bounced to a homepage, sold out, or clearly a different product.
+// Pages we can't read (bot walls, pages built by JavaScript) are "unverified", not bad.
+function judgeLink(p, name) {
+  if (!p) return "unverified";
+  if (!p.ok) return [404, 410].includes(p.status) ? "drop" : "unverified";
+  let path = "/"; try { path = new URL(p.finalUrl).pathname.replace(/\/+$/, ""); } catch {}
+  if (path === "") return "drop";
+  if (p.soldOut) return "drop";
+  if (!p.isProduct || !p.name) return "unverified";
+  if (sameItem(name, p.name, 0.8)) return "verified";
+  return sameItem(name, p.name, 0.5) ? "unverified" : "drop";
 }
 
 // Sites that block page readers; skip them when hunting for a photo.
@@ -338,21 +352,20 @@ async function synthesize(input, forWhom, mode, env) {
 
   const checked = await Promise.all(candidates.map(async (c) => {
     if (BLOCKS_READERS.test(host(c.url))) return { ...c, verified: false };
-    let p;
-    try { p = await readPage(c.url); } catch { return { ...c, verified: false } } // timeout etc.
-    if (p.ok) {
-      const real = p.isProduct && !p.soldOut && new URL(p.finalUrl).pathname.replace(/\/+$/, "") !== "" && sameItem(name, p.name);
-      return real ? { store: c.store, url: p.finalUrl, price: p.price || c.price, verified: true, image: p.image } : null;
-    }
-    if ([404, 410].includes(p.status)) return null; // dead end
-    return { ...c, verified: false }; // 403/429/5xx: bot wall, can't check
+    let p = null;
+    try { p = await readPage(c.url); } catch { /* timeout: can't tell */ }
+    const v = judgeLink(p, name);
+    if (v === "drop") return null;
+    if (v === "verified") return { store: c.store, url: p.finalUrl, price: p.price || c.price, verified: true, image: sameItem(name, p.name, 0.8) ? p.image : null };
+    return { ...c, url: p?.ok ? p.finalUrl : c.url, price: p?.price || c.price, verified: false };
   }));
   const good = checked.filter((c) => c?.verified);
+  const maybe = checked.filter((c) => c && !c.verified);
   for (const c of good) { if (!image && c.image) image = c.image; delete c.image; }
-  // Search-guessed URLs on sites we can't read are only kept when nothing could be verified.
-  const fallback = good.length || links.length ? [] : checked.filter((c) => c && !c.verified && usedSearch);
   if (links[0]) links[0].verified = pageIsGood && !page.soldOut;
-  links.push(...good, ...fallback);
+  // Confirmed links first; ones we couldn't check (store blocks readers, or builds its page in the
+  // browser) stay as backups. The page only shows a backup when nothing was confirmed.
+  links.push(...good, ...maybe);
 
   return {
     name,
