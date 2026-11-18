@@ -1,6 +1,6 @@
 // Data model, API client and small helpers shared by the pages.
 
-export type Link = { store: string; url: string; price?: string | null; verified?: boolean }
+export type Link = { store: string; url: string; price?: string | null; verified?: boolean; official?: boolean }
 export type Gift = {
   id: string
   sourceUrl: string | null
@@ -106,11 +106,14 @@ export function giftImage(gift: Gift): string | null {
   return null
 }
 
-// The one link to show. If the server confirmed some links (page opens, same item, in stock),
+// The one link to show: the brand's own store if kept. Otherwise, if the server confirmed some links (page opens, same item, in stock),
 // pick the cheapest of those, ignoring prices under half the priciest (likely wrong). Otherwise
 // take the AI's first pick: the cheapest unchecked link is often an official store that's sold out.
 export function bestLink(gift: Gift): Link | null {
   const links = (gift.links || []).filter((l) => !/amazon\.com\/s\?|google\.com\/search/.test(l.url))
+  // The brand's own store wins whenever the server kept it (it drops dead or sold-out pages).
+  const official = links.find((l) => l.official)
+  if (official) return official
   const ok = links.filter((l) => l.verified)
   const priced = ok.filter((l) => priceNum(l.price || "") > 0)
   const top = Math.max(0, ...priced.map((l) => priceNum(l.price!)))
@@ -119,6 +122,6 @@ export function bestLink(gift: Gift): Link | null {
   return ok[0] || links[0] || (gift.sourceUrl ? { store: host(gift.sourceUrl), url: gift.sourceUrl } : null)
 }
 
-// "$24.99" -> "$25", "$1,299.50" -> "$1,300"; ranges and whole numbers are left alone.
+// One rounded price: "$24.99" -> "$25", "$1,299.50" -> "$1,300", a range "$40–60" -> "$40".
 export const roundPrice = (p?: string | null) =>
-  String(p || "").replace(/\d[\d,]*\.\d+/g, (m) => Math.ceil(Number(m.replace(/,/g, ""))).toLocaleString("en-US"))
+  String(p || "").replace(/^(\D*[\d,.]+)\s*(?:[-–—]|to)\s*\D*[\d,.]+.*$/i, "$1").trim().replace(/\d[\d,]*\.\d+/g, (m) => Math.ceil(Number(m.replace(/,/g, ""))).toLocaleString("en-US"))

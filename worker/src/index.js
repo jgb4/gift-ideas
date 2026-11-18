@@ -164,6 +164,9 @@ async function gemini(env, prompt, useSearch) {
   return out;
 }
 
+// One price, never a range: "$40–60" -> "$40".
+const onePrice = (p) => String(p || "").replace(/^(\D*[\d,.]+)\s*(?:[-–—]|to)\s*\D*[\d,.]+.*$/i, "$1").trim();
+
 // Download a photo and ask Gemini whether it shows the item. Any failure counts as "no".
 async function photoShows(env, url, name) {
   if (env.GEMINI_STUB === "1") return false;
@@ -284,7 +287,7 @@ async function googleToken(sa) {
 
 const FIELDS = `"name": "short clear product name",
   "description": "a plain phrase of at most 10 words saying what it is (key spec if useful). No marketing, no 'perfect for', no brand repeat",
-  "price": "estimated typical US price, e.g. \\"$49\\" or \\"$40–60\\"",`;
+  "price": "the current US retail price as one figure, e.g. \\"$49\\" (never a range); use the brand's own price if it sells it",`;
 
 function prompt(input, url, page, forWhom, withSearch) {
   const what = url
@@ -303,7 +306,7 @@ Every link must be a live, in-stock, direct product page for this exact model, n
 Reply with ONLY a JSON object:
 { ${FIELDS}
   "images": ["up to 5 image URLs copied from different product listings you found for this exact item (same model, color, player), best first"],
-  "links": [{"store": "Store name", "url": "https://...", "price": "$.. or null"}],
+  "links": [{"store": "Store name", "url": "https://...", "price": "$.. or null", "official": true if this is the brand's own store, else false}],
   "searchQuery": "short brand + model search query" }
 2 to 3 links from different stores, best first. For collectibles or out-of-print items, include a marketplace that has it (TCGplayer, eBay, StockX). Only URLs you actually found.`
     : `Reply with ONLY a JSON object:
@@ -371,12 +374,12 @@ async function synthesize(input, forWhom, mode, env) {
   let image = pageIsGood ? page.image : null; // the page you pasted is the item itself
   const candidates = [];
   const seen = new Set(links.map((l) => host(l.url)));
-  const push = (u, store, price) => {
+  const push = (u, store, price, official) => {
     if (candidates.length >= 4 || !asUrl(u) || seen.has(host(u))) return;
     try { if (new URL(u).pathname.replace(/\/+$/, "") === "") return; } catch { return; }
-    seen.add(host(u)); candidates.push({ url: u, store: store || host(u), price: price || null });
+    seen.add(host(u)); candidates.push({ url: u, store: store || host(u), price: price || null, official: official === true });
   };
-  if (usedSearch) for (const l of Array.isArray(ai?.links) ? ai.links : []) push(l?.url, l?.store, l?.price);
+  if (usedSearch) for (const l of Array.isArray(ai?.links) ? ai.links : []) push(l?.url, l?.store, l?.price, l?.official);
   else for (const u of Array.isArray(ai?.productUrls) ? ai.productUrls : []) push(u);
 
   const checked = await Promise.all(candidates.map(async (c) => {
@@ -385,7 +388,7 @@ async function synthesize(input, forWhom, mode, env) {
     try { p = await readPage(c.url); } catch { /* timeout: can't tell */ }
     const v = judgeLink(p, name);
     if (v === "drop") return null;
-    if (v === "verified") return { store: c.store, url: p.finalUrl, price: p.price || c.price, verified: true, image: sameItem(name, p.name, 0.8) ? p.image : null };
+    if (v === "verified") return { store: c.store, official: c.official, url: p.finalUrl, price: onePrice(p.price || c.price) || null, verified: true, image: sameItem(name, p.name, 0.8) ? p.image : null };
     // Couldn't confirm the page, but its main photo is still worth showing Gemini.
     return { ...c, url: p?.ok ? p.finalUrl : c.url, price: p?.price || c.price, verified: false, photo: p?.ok ? p.image : null };
   }));
@@ -410,7 +413,7 @@ async function synthesize(input, forWhom, mode, env) {
   return {
     name,
     description: String(ai?.description || page?.description || "").slice(0, 120),
-    price: String(page?.price || links.find((l) => l.price)?.price || ai?.price || ""),
+    price: onePrice(page?.price || links.find((l) => l.official && l.price)?.price || links.find((l) => l.price)?.price || ai?.price || ""),
     image,
     links: links.slice(0, 3),
     sourceUrl: url,
