@@ -12,11 +12,8 @@ function Home() {
       <ul className="mt-6 divide-y border-y">
         {HOLIDAYS.map((h) => (
           <li key={h.path}>
-            <a href={`${h.path}/`} className="flex items-baseline justify-between py-3 text-sm hover:text-brand">
-              <span className="font-medium">{h.name}</span>
-              <span className="text-muted-foreground">
-                {h.name === "Hanukkah" ? "Me, Emma, Andrew, Mom and Dad" : "Birthday gift lists"}
-              </span>
+            <a href={`${h.path}/`} className="block py-3 text-sm font-medium hover:text-brand">
+              {h.name}
             </a>
           </li>
         ))}

@@ -15,3 +15,6 @@
 - Reuse existing components before creating new ones.
 - Keep changes scoped to the requested task.
 - Run relevant tests after changes.
+
+## Shipping
+- After every change: run `cd web && npm run build`, check it, then commit and push to `main` without asking. Pushing to `main` is what deploys the live site on GitHub Pages.
