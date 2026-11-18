@@ -134,3 +134,7 @@ export const ago = (iso?: string) => {
   const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
   return m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`
 }
+
+// "$24.99" -> "$25", "$1,299.50" -> "$1,300"; ranges and whole numbers are left alone.
+export const roundPrice = (p?: string | null) =>
+  String(p || "").replace(/\d[\d,]*\.\d+/g, (m) => Math.ceil(Number(m.replace(/,/g, ""))).toLocaleString("en-US"))

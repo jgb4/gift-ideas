@@ -140,7 +140,7 @@
 /* Hanukkah: always a light-blue theme (its page skips dark mode), with a faint
    line-icon pattern of stars, dreidels and menorahs behind the content. */
 body[data-holiday="Hanukkah"] {
-    --background: #A1D5FF;
+    --background: #D1ECFF;
     --foreground: oklch(0.24 0.06 255);
     --card: oklch(0.975 0.02 240);
     --card-foreground: oklch(0.24 0.06 255);
@@ -148,20 +148,20 @@ body[data-holiday="Hanukkah"] {
     --popover-foreground: oklch(0.24 0.06 255);
     --primary: oklch(0.42 0.14 255);
     --primary-foreground: oklch(0.985 0.01 240);
-    --secondary: oklch(0.87 0.08 240);
+    --secondary: oklch(0.9 0.05 240);
     --secondary-foreground: oklch(0.3 0.08 255);
-    --muted: oklch(0.87 0.08 240);
-    --muted-foreground: oklch(0.4 0.08 252);
-    --accent: oklch(0.86 0.085 240);
+    --muted: oklch(0.9 0.05 240);
+    --muted-foreground: oklch(0.45 0.07 252);
+    --accent: oklch(0.88 0.06 240);
     --accent-foreground: oklch(0.3 0.08 255);
-    --border: oklch(0.74 0.09 242);
-    --input: oklch(0.72 0.09 242);
+    --border: oklch(0.82 0.06 242);
+    --input: oklch(0.78 0.07 242);
     --ring: oklch(0.6 0.14 250);
     --brand: oklch(0.48 0.18 256);
 }
 
 /* The icon pattern lives on its own layer behind the page and is masked out of
-   the centered content column (max-w-3xl = 48rem), so icons only show in the
+   the centered content column (max-w-2xl = 42rem), so icons only show in the
    side margins and never sit behind text. On narrow screens it's hidden. */
 body[data-holiday="Hanukkah"]::before {
     content: "";
@@ -169,7 +169,7 @@ body[data-holiday="Hanukkah"]::before {
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    --edge: calc(50% - 25rem);
+    --edge: calc(50% - 22rem);
     -webkit-mask-image: linear-gradient(to right, #000 calc(var(--edge) - 2rem), transparent var(--edge), transparent calc(100% - var(--edge)), #000 calc(100% - var(--edge) + 2rem));
     mask-image: linear-gradient(to right, #000 calc(var(--edge) - 2rem), transparent var(--edge), transparent calc(100% - var(--edge)), #000 calc(100% - var(--edge) + 2rem));
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' fill='none' stroke='%233a6cc2' stroke-opacity='.2' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg transform='translate(52 56)'%3E%3Cpath d='M0-14 12.1 7H-12.1ZM0 14 12.1-7H-12.1Z'/%3E%3C/g%3E%3Cg transform='translate(190 66)'%3E%3Cpath d='M0-20V-12M-10-12H10V4L0 16-10 4Z'/%3E%3C/g%3E%3Cg transform='translate(116 196)'%3E%3Cpath d='M-24 0H24M-24 0V-8M-18 0V-8M-12 0V-8M-6 0V-8M0 0V-12M6 0V-8M12 0V-8M18 0V-8M24 0V-8M0 0V14M-9 14H9'/%3E%3C/g%3E%3Cg transform='translate(226 214) scale(.55)'%3E%3Cpath d='M0-14 12.1 7H-12.1ZM0 14 12.1-7H-12.1Z'/%3E%3C/g%3E%3C/svg%3E");

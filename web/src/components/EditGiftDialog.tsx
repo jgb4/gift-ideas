@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -34,14 +34,13 @@ export function EditGiftDialog({ gift, onClose, onRerun, onSave }: Props) {
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Edit gift</DialogTitle>
-          <DialogDescription>Change what you asked for and look it up again, or edit the details by hand.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2">
-          <Label htmlFor="e-request">What you asked for</Label>
+          <Label htmlFor="e-request">Link or description</Label>
           <Textarea id="e-request" rows={2} value={f.request} onChange={set("request")} placeholder="A link or a description" />
           <Button variant="secondary" size="sm" disabled={!f.request.trim()} onClick={() => onRerun(f.request.trim())}>
-            Look it up again
+            Redo with AI
           </Button>
         </div>
 
@@ -52,13 +51,13 @@ export function EditGiftDialog({ gift, onClose, onRerun, onSave }: Props) {
           onSave({ name: f.name, description: f.description, price: f.price, image: f.image || null, links: parseLinks(f.links) })
         }}>
           <div className="grid gap-1.5"><Label htmlFor="e-name">Name</Label><Input id="e-name" value={f.name} onChange={set("name")} /></div>
-          <div className="grid gap-1.5"><Label htmlFor="e-desc">Short description</Label><Textarea id="e-desc" rows={2} value={f.description} onChange={set("description")} /></div>
+          <div className="grid gap-1.5"><Label htmlFor="e-desc">Description</Label><Textarea id="e-desc" rows={2} value={f.description} onChange={set("description")} /></div>
           <div className="grid grid-cols-[8rem_1fr] gap-3">
-            <div className="grid gap-1.5"><Label htmlFor="e-price">Estimated price</Label><Input id="e-price" placeholder="$49" value={f.price} onChange={set("price")} /></div>
-            <div className="grid gap-1.5"><Label htmlFor="e-image">Picture URL</Label><Input id="e-image" value={f.image} onChange={set("image")} /></div>
+            <div className="grid gap-1.5"><Label htmlFor="e-price">Price</Label><Input id="e-price" placeholder="$49" value={f.price} onChange={set("price")} /></div>
+            <div className="grid gap-1.5"><Label htmlFor="e-image">Image URL</Label><Input id="e-image" value={f.image} onChange={set("image")} /></div>
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="e-links">Where to buy</Label>
+            <Label htmlFor="e-links">Links</Label>
             <Textarea id="e-links" rows={3} value={f.links} onChange={set("links")} placeholder="Store | URL (one per line)" className="font-mono text-xs" />
           </div>
         </form>

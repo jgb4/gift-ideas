@@ -28,15 +28,15 @@ export function ConfirmDialog({ confirm, onClose }: { confirm: Confirm | null; o
   )
 }
 
-type AddProps = { open: boolean; holiday: string; onClose: () => void; onAdd: (name: string) => void }
+type AddProps = { open: boolean; onClose: () => void; onAdd: (name: string) => void }
 
-export function AddPersonDialog({ open, holiday, onClose, onAdd }: AddProps) {
+export function AddPersonDialog({ open, onClose, onAdd }: AddProps) {
   const [name, setName] = useState("")
   useEffect(() => { if (open) setName("") }, [open])
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-sm">
-        <DialogHeader><DialogTitle>Add a person to {holiday}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Add person</DialogTitle></DialogHeader>
         <form id="add-person" onSubmit={(e) => { e.preventDefault(); if (name.trim()) onAdd(name.trim()) }}>
           <Input autoFocus placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
         </form>

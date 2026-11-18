@@ -4,15 +4,17 @@ import { GiftRow } from "@/components/GiftRow"
 import { Login } from "@/components/Login"
 import { AddPersonDialog, ConfirmDialog, type Confirm } from "@/components/SmallDialogs"
 import { UsageDialog, monthFigure } from "@/components/UsageDialog"
-import { Badge } from "@/components/ui/badge"
+import { MoreHorizontal, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
-  HOLIDAYS, SignedOut, api, asUrl, fmt, getSession, getToken, logSearch, newCategory, priceNum, rid,
+  HOLIDAYS, SignedOut, api, asUrl, fmt, getSession, getToken, logSearch, newCategory, rid,
   sameName, setSignedOutHandler, setToken, store, type DB, type Gift, type Usage,
 } from "@/lib/gifts"
-import { cn } from "@/lib/utils"
 
 export function HolidayApp({ holiday }: { holiday: string }) {
   const [authed, setAuthed] = useState(!!getToken())
@@ -158,95 +160,64 @@ function Lists({ holiday, onLock }: { holiday: string; onLock: () => void }) {
     runQueue()
   }
 
+  const others = HOLIDAYS.filter((h) => !sameName(h.name, holiday))
+
   const header = (
-    <header className="sticky top-0 z-10 border-b bg-background">
-      <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-x-5 px-4 text-sm sm:h-12 sm:flex-nowrap">
-        <a href="../" className="py-3 font-semibold tracking-tight whitespace-nowrap sm:py-0">Gift Ideas</a>
-        <nav className="order-last flex w-full items-center gap-4 pb-3 sm:order-none sm:w-auto sm:pb-0">
-          {HOLIDAYS.map((h) => {
-            const hc = db.current?.categories.find((x) => sameName(x.name, h.name))
-            const n = hc ? hc.profiles.reduce((s, p) => s + p.items.length, 0) : null
-            const active = sameName(h.name, holiday)
-            return (
-              <a key={h.path} href={`../${h.path}/`} aria-current={active ? "page" : undefined}
-                className={cn("transition-colors hover:text-foreground", active ? "text-foreground" : "text-muted-foreground")}>
-                {h.name}{n != null && <span className="ml-1.5 text-xs text-muted-foreground tabular-nums">{n}</span>}
-              </a>
-            )
-          })}
-        </nav>
-        <div className="ml-auto flex items-center gap-1">
-          <span className={cn("hidden text-xs sm:inline", saveState === "bad" ? "text-destructive" : "text-muted-foreground")}>
-            {saveState === "busy" ? "Saving…" : saveState === "bad" ? "Couldn't save" : "Saved"}
-          </span>
-          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { setUsageOpen(true); loadUsage() }}>
-            <span className="hidden tabular-nums sm:inline">
-              Searches: {fmt(session.q)} session · {fmt(month.n)} month{month.label === "this site" ? " (this site)" : ""}
-            </span>
-            <span className="tabular-nums sm:hidden">Searches {fmt(session.q)}/{fmt(month.n)}</span>
-          </Button>
-          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={onLock}>Lock</Button>
-        </div>
+    <header className="flex items-center gap-4">
+      <h1 className="text-xl font-semibold tracking-tight">{holiday}</h1>
+      <div className="ml-auto flex items-center gap-3 text-sm text-muted-foreground">
+        {saveState === "bad" && <span className="text-destructive">Couldn't save</span>}
+        {others.map((h) => <a key={h.path} href={`../${h.path}/`} className="hover:text-foreground">{h.name}</a>)}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label="Menu" className="text-muted-foreground"><MoreHorizontal /></Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onSelect={() => { setUsageOpen(true); loadUsage() }}>
+              Searches <span className="ml-auto text-xs text-muted-foreground tabular-nums">{fmt(session.q)} / {fmt(month.n)}</span>
+            </DropdownMenuItem>
+            {prof && !prof.special && c && (
+              <DropdownMenuItem variant="destructive" onSelect={() => setConfirm({
+                title: `Remove ${prof.name}?`, description: `Deletes their ${prof.items.length} ideas.`, action: "Remove",
+                run: () => change(() => { c.profiles = c.profiles.filter((x) => x.id !== prof.id) }),
+              })}>Remove {prof.name}</DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onLock}>Lock</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   )
 
-  if (loadError) return <>{header}<p className="mx-auto max-w-3xl px-4 py-10 text-sm text-muted-foreground">Couldn't load your lists ({loadError}). Reload to try again.</p></>
-  if (!c) return <>{header}<p className="mx-auto max-w-3xl px-4 py-10 text-sm text-muted-foreground">Loading your lists…</p></>
+  const shell = (body: React.ReactNode) => <main className="mx-auto max-w-2xl px-4 pt-8 pb-16">{header}{body}</main>
 
-  const total = prof ? prof.items.filter((i) => !i.purchased).reduce((s, i) => s + priceNum(i.price), 0) : 0
-  const bought = prof ? prof.items.filter((i) => i.purchased).length : 0
+  if (loadError) return shell(<p className="mt-8 text-sm text-muted-foreground">Couldn't load ({loadError}). Reload to try again.</p>)
+  if (!c) return shell(null)
 
   return (
     <>
-      {header}
-      <main className="mx-auto max-w-3xl px-4 pt-8 pb-16">
-        <h1 className="text-2xl font-semibold tracking-tight">{c.name}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {c.profiles.length ? "Pick a person, then add gift ideas." : "Add the people you're shopping for."}
-        </p>
-
-        <div className="mt-6 flex items-center gap-2 overflow-x-auto border-b">
+      {shell(<>
+        <div className="mt-4 flex items-center gap-1 overflow-x-auto overflow-y-hidden border-b [scrollbar-width:none]">
           {c.profiles.length > 0 && (
             <Tabs value={prof?.id} onValueChange={selectProf}>
               <TabsList variant="line">
-                {c.profiles.map((p) => (
-                  <TabsTrigger key={p.id} value={p.id}>
-                    {p.name}<span className="text-xs text-muted-foreground tabular-nums">{p.items.length}</span>
-                  </TabsTrigger>
-                ))}
+                {c.profiles.map((p) => <TabsTrigger key={p.id} value={p.id}>{p.name}</TabsTrigger>)}
               </TabsList>
             </Tabs>
           )}
-          <Button variant="ghost" size="sm" className="mb-1 shrink-0 text-muted-foreground" onClick={() => setAddingPerson(true)}>
-            Add person
-          </Button>
+          <Button variant="ghost" size="icon-sm" aria-label="Add person" className="mb-1 shrink-0 text-muted-foreground"
+            onClick={() => setAddingPerson(true)}><Plus /></Button>
         </div>
 
         {prof && (
-          <section className="mt-6">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-              <h2 className="flex items-center gap-2 text-base font-medium">
-                {prof.special ? "My wishlist" : prof.name}
-                {prof.special && <Badge variant="outline">Just for me</Badge>}
-              </h2>
-              <p className="text-sm text-muted-foreground tabular-nums">
-                {prof.items.length} ideas · {bought} bought · about ${Math.round(total).toLocaleString()} left
-              </p>
-            </div>
-
-            <form onSubmit={addGift} className="mt-4 flex gap-2">
-              <Input value={draft} onChange={(e) => setDraft(e.target.value)} autoComplete="off"
-                placeholder="Paste a product link, or describe a gift (e.g. “cozy wool slippers, size 9”)" />
-              <Button type="submit" disabled={!draft.trim()}>Add gift</Button>
+          <>
+            <form onSubmit={addGift} className="mt-5">
+              <Input value={draft} onChange={(e) => setDraft(e.target.value)} autoComplete="off" enterKeyHint="go"
+                placeholder="Paste a link or describe a gift" />
             </form>
-            <p className="mt-2 text-xs text-muted-foreground">
-              AI finds the product, writes a short description, estimates the price and adds places to buy, in about 5 to 20 seconds.
-              Use Find stores on a gift to search the web for the best stores and current prices.
-            </p>
-
-            {prof.items.length ? (
-              <ul className="mt-6 divide-y border-y">
+            {prof.items.length > 0 && (
+              <ul className="mt-3 divide-y">
                 {prof.items.map((g) => (
                   <GiftRow key={g.id} gift={g}
                     onToggleBought={() => change(() => { g.purchased = !g.purchased })}
@@ -259,22 +230,10 @@ function Lists({ holiday, onLock }: { holiday: string; onLock: () => void }) {
                   />
                 ))}
               </ul>
-            ) : (
-              <p className="mt-6 border-y py-12 text-center text-sm text-muted-foreground">No gifts yet. Paste a link or describe a gift above.</p>
             )}
-
-            {!prof.special && (
-              <Button variant="link" size="sm" className="mt-6 px-0 text-muted-foreground hover:text-destructive"
-                onClick={() => setConfirm({
-                  title: `Remove ${prof.name}?`, description: `This deletes their ${prof.items.length} gift ideas from ${c.name}.`, action: "Remove",
-                  run: () => change(() => { c.profiles = c.profiles.filter((x) => x.id !== prof.id) }),
-                })}>
-                Remove {prof.name} from this list
-              </Button>
-            )}
-          </section>
+          </>
         )}
-      </main>
+      </>)}
 
       <EditGiftDialog gift={editing} onClose={() => setEditing(null)}
         onRerun={(text) => {
@@ -291,7 +250,7 @@ function Lists({ holiday, onLock }: { holiday: string; onLock: () => void }) {
       />
       <UsageDialog open={usageOpen} onOpenChange={setUsageOpen} usage={usage} session={session} />
       <ConfirmDialog confirm={confirm} onClose={() => setConfirm(null)} />
-      <AddPersonDialog open={addingPerson} holiday={c.name} onClose={() => setAddingPerson(false)}
+      <AddPersonDialog open={addingPerson} onClose={() => setAddingPerson(false)}
         onAdd={(name) => {
           const p = { id: rid(), name, special: false, items: [] }
           change(() => c.profiles.push(p)); selectProf(p.id); setAddingPerson(false)
