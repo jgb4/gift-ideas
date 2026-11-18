@@ -178,7 +178,10 @@ async function photoShows(env, url, name) {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
       body: JSON.stringify({ contents: [{ parts: [
-        { text: `Is this a product photo of: ${name}? It must be this exact item (same model, color and material), not a similar one, and not a logo, banner or collage. Answer only yes or no.` },
+        { text: `A shop listing says this photo shows: "${name}".
+Judge only what you can see; don't use outside knowledge about people, teams or release dates.
+Answer "no" if it's clearly the wrong kind of item, a different color or material than the name says, shows a different design than the name describes, or is a logo, banner, collage or placeholder. Otherwise answer "yes".
+Answer only yes or no.` },
         { inline_data: { mime_type: type, data: btoa(bin) } },
       ] }] }),
       signal: AbortSignal.timeout(15000),
@@ -299,7 +302,7 @@ Turn it into one specific, real, currently sold product that best matches.
 Every link must be a live, in-stock, direct product page for this exact model, never a homepage, category or search page. If the brand sells it on its own site, list that product page first.
 Reply with ONLY a JSON object:
 { ${FIELDS}
-  "images": ["up to 3 image URLs copied from the product listings you found for this exact item (same model, color, player), best first"],
+  "images": ["up to 5 image URLs copied from different product listings you found for this exact item (same model, color, player), best first"],
   "links": [{"store": "Store name", "url": "https://...", "price": "$.. or null"}],
   "searchQuery": "short brand + model search query" }
 2 to 3 links from different stores, best first. For collectibles or out-of-print items, include a marketplace that has it (TCGplayer, eBay, StockX). Only URLs you actually found.`
@@ -400,6 +403,7 @@ async function synthesize(input, forWhom, mode, env) {
   // keep the first one Gemini confirms (by looking at it) shows this item.
   if (!image) {
     const urls = [...new Set([...pagePhotos, ...(Array.isArray(ai?.images) ? ai.images : []), ai?.image].filter((u) => asUrl(String(u || ""))))].slice(0, 6);
+    console.log("photo candidates", pagePhotos.length, "from pages,", urls.length, "total");
     for (const u of urls) { if (await photoShows(env, u, name)) { image = u; break; } }
   }
 
