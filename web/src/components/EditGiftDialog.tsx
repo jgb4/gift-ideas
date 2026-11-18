@@ -7,23 +7,22 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
-import { parseLinks, type Gift } from "@/lib/gifts"
+import { asUrl, bestLink, host, type Gift } from "@/lib/gifts"
 
 type Props = {
   gift: Gift | null
   onClose: () => void
   onRerun: (request: string) => void
-  onSave: (fields: Pick<Gift, "name" | "description" | "price" | "image" | "links">) => void
+  onSave: (fields: Pick<Gift, "name" | "price" | "links">) => void
 }
 
 export function EditGiftDialog({ gift, onClose, onRerun, onSave }: Props) {
-  const [f, setF] = useState({ request: "", name: "", description: "", price: "", image: "", links: "" })
+  const [f, setF] = useState({ request: "", name: "", price: "", link: "" })
   useEffect(() => {
     if (!gift) return
     setF({
       request: gift.sourceUrl || gift.query || gift.name || "",
-      name: gift.name || "", description: gift.description || "", price: gift.price || "", image: gift.image || "",
-      links: (gift.links || []).map((l) => `${l.store} | ${l.url}`).join("\n"),
+      name: gift.name || "", price: bestLink(gift)?.price || gift.price || "", link: bestLink(gift)?.url || "",
     })
   }, [gift])
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -48,17 +47,14 @@ export function EditGiftDialog({ gift, onClose, onRerun, onSave }: Props) {
 
         <form id="edit-gift" className="grid gap-3" onSubmit={(e) => {
           e.preventDefault()
-          onSave({ name: f.name, description: f.description, price: f.price, image: f.image || null, links: parseLinks(f.links) })
+          const url = asUrl(f.link.trim())
+          const store = url && gift ? bestLink(gift)?.url === url ? bestLink(gift)!.store : host(url) : ""
+          onSave({ name: f.name, price: f.price, links: url ? [{ store, url, price: f.price }] : [] })
         }}>
           <div className="grid gap-1.5"><Label htmlFor="e-name">Name</Label><Input id="e-name" value={f.name} onChange={set("name")} /></div>
-          <div className="grid gap-1.5"><Label htmlFor="e-desc">Description</Label><Textarea id="e-desc" rows={2} value={f.description} onChange={set("description")} /></div>
           <div className="grid grid-cols-[8rem_1fr] gap-3">
             <div className="grid gap-1.5"><Label htmlFor="e-price">Price</Label><Input id="e-price" placeholder="$49" value={f.price} onChange={set("price")} /></div>
-            <div className="grid gap-1.5"><Label htmlFor="e-image">Image URL</Label><Input id="e-image" value={f.image} onChange={set("image")} /></div>
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="e-links">Links</Label>
-            <Textarea id="e-links" rows={3} value={f.links} onChange={set("links")} placeholder="Store | URL (one per line)" className="font-mono text-xs" />
+            <div className="grid gap-1.5"><Label htmlFor="e-link">Link</Label><Input id="e-link" value={f.link} onChange={set("link")} /></div>
           </div>
         </form>
 

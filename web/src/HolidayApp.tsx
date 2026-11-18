@@ -1,31 +1,27 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react"
+import { useEffect, useReducer, useRef, useState } from "react"
 import { EditGiftDialog } from "@/components/EditGiftDialog"
 import { GiftRow } from "@/components/GiftRow"
 import { Login } from "@/components/Login"
 import { AddPersonDialog, ConfirmDialog, type Confirm } from "@/components/SmallDialogs"
-import { UsageDialog, monthFigure } from "@/components/UsageDialog"
-import { MoreHorizontal, Plus } from "lucide-react"
+import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
-  HOLIDAYS, SignedOut, api, asUrl, fmt, getSession, getToken, logSearch, newCategory, rid,
-  sameName, setSignedOutHandler, setToken, store, type DB, type Gift, type Usage,
+  SignedOut, api, asUrl, getToken, newCategory, rid,
+  sameName, setSignedOutHandler, store, type DB, type Gift,
 } from "@/lib/gifts"
 
 export function HolidayApp({ holiday }: { holiday: string }) {
   const [authed, setAuthed] = useState(!!getToken())
   useEffect(() => setSignedOutHandler(() => setAuthed(false)), [])
   if (!authed) return <Login title={holiday} onUnlock={() => setAuthed(true)} />
-  return <Lists holiday={holiday} onLock={() => { setToken(null); setAuthed(false) }} />
+  return <Lists holiday={holiday} />
 }
 
 type SaveState = "ok" | "busy" | "bad"
 
-function Lists({ holiday, onLock }: { holiday: string; onLock: () => void }) {
+function Lists({ holiday }: { holiday: string }) {
   const db = useRef<DB | null>(null)
   const [, rerender] = useReducer((x: number) => x + 1, 0)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -34,9 +30,6 @@ function Lists({ holiday, onLock }: { holiday: string; onLock: () => void }) {
   const [profId, setProfId] = useState<string | null>(() => {
     try { return JSON.parse(store.get(selKey) || "{}").prof || null } catch { return null }
   })
-  const [usage, setUsage] = useState<Usage | null>(null)
-  const [session, setSession] = useState(getSession)
-  const [usageOpen, setUsageOpen] = useState(false)
   const [editing, setEditing] = useState<Gift | null>(null)
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [addingPerson, setAddingPerson] = useState(false)
@@ -53,10 +46,6 @@ function Lists({ holiday, onLock }: { holiday: string; onLock: () => void }) {
     if (!cat()) { db.current.categories.push(newCategory(holiday)); return true }
     return false
   }
-
-  const loadUsage = useCallback(async () => {
-    try { setUsage(await api<Usage>("/api/usage")) } catch { /* not critical */ }
-  }, [])
 
   // Saves only this holiday into the latest data, so the other holiday's page can't be overwritten.
   function save() {
@@ -110,11 +99,6 @@ function Lists({ holiday, onLock }: { holiday: string; onLock: () => void }) {
         }
         const live = findGift(next.g.id)?.g // may have been deleted meanwhile
         if (live) change(() => Object.assign(live, result, { status: "ready", mode: null }))
-        if (result.searched) {
-          logSearch(result.name || next.g.name, result.searchQueries)
-          setSession(getSession())
-          loadUsage()
-        }
       }
     } finally {
       queueBusy.current = false
@@ -127,7 +111,7 @@ function Lists({ holiday, onLock }: { holiday: string; onLock: () => void }) {
       try {
         db.current = await api<DB>("/api/data")
         if (ensureCategory()) await api("/api/data", { method: "PUT", body: JSON.stringify(db.current) })
-        rerender(); runQueue(); loadUsage()
+        rerender(); runQueue()
       } catch (e) {
         if (!(e instanceof SignedOut)) setLoadError((e as Error).message)
       }
@@ -145,7 +129,6 @@ function Lists({ holiday, onLock }: { holiday: string; onLock: () => void }) {
   const c = cat()
   const prof = c?.profiles.find((p) => p.id === profId) || c?.profiles[0]
   const selectProf = (id: string) => { setProfId(id); store.set(selKey, JSON.stringify({ prof: id })) }
-  const month = monthFigure(usage)
 
   function addGift(e: React.FormEvent) {
     e.preventDefault()
@@ -160,32 +143,12 @@ function Lists({ holiday, onLock }: { holiday: string; onLock: () => void }) {
     runQueue()
   }
 
-  const others = HOLIDAYS.filter((h) => !sameName(h.name, holiday))
-
   const header = (
-    <header className="flex items-center gap-4">
+    <header className="flex items-baseline gap-4">
       <h1 className="text-xl font-semibold tracking-tight">{holiday}</h1>
       <div className="ml-auto flex items-center gap-3 text-sm text-muted-foreground">
         {saveState === "bad" && <span className="text-destructive">Couldn't save</span>}
-        {others.map((h) => <a key={h.path} href={`../${h.path}/`} className="hover:text-foreground">{h.name}</a>)}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="Menu" className="text-muted-foreground"><MoreHorizontal /></Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onSelect={() => { setUsageOpen(true); loadUsage() }}>
-              Searches <span className="ml-auto text-xs text-muted-foreground tabular-nums">{fmt(session.q)} / {fmt(month.n)}</span>
-            </DropdownMenuItem>
-            {prof && !prof.special && c && (
-              <DropdownMenuItem variant="destructive" onSelect={() => setConfirm({
-                title: `Remove ${prof.name}?`, description: `Deletes their ${prof.items.length} ideas.`, action: "Remove",
-                run: () => change(() => { c.profiles = c.profiles.filter((x) => x.id !== prof.id) }),
-              })}>Remove {prof.name}</DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={onLock}>Lock</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <a href="../" className="hover:text-foreground">Gift Ideas</a>
       </div>
     </header>
   )
@@ -221,7 +184,6 @@ function Lists({ holiday, onLock }: { holiday: string; onLock: () => void }) {
                 {prof.items.map((g) => (
                   <GiftRow key={g.id} gift={g}
                     onToggleBought={() => change(() => { g.purchased = !g.purchased })}
-                    onFindStores={() => { change(() => Object.assign(g, { status: "processing", mode: "stores", error: null })); runQueue() }}
                     onEdit={() => setEditing(g)}
                     onRemove={() => setConfirm({
                       title: "Remove this gift?", description: g.name, action: "Remove",
@@ -248,7 +210,6 @@ function Lists({ holiday, onLock }: { holiday: string; onLock: () => void }) {
           setEditing(null)
         }}
       />
-      <UsageDialog open={usageOpen} onOpenChange={setUsageOpen} usage={usage} session={session} />
       <ConfirmDialog confirm={confirm} onClose={() => setConfirm(null)} />
       <AddPersonDialog open={addingPerson} onClose={() => setAddingPerson(false)}
         onAdd={(name) => {

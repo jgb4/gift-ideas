@@ -32,7 +32,6 @@ const API = location.hostname === "localhost"
   ? "http://localhost:8787"
   : "https://gift-ideas-api.gift-ideas-api.workers.dev"
 const TOKEN_KEY = "gift-token"
-export const SESSION_KEY = "gift-search-session"
 
 export const store = {
   get(k: string) { try { return localStorage.getItem(k) } catch { return null } },
@@ -47,7 +46,7 @@ export function getToken() {
 export function setToken(token: string | null, remember = true) {
   store.set(TOKEN_KEY, null)
   try { sessionStorage.removeItem(TOKEN_KEY) } catch { /* ignore */ }
-  if (!token) { try { sessionStorage.removeItem(SESSION_KEY) } catch { /* ignore */ } return }
+  if (!token) return
   if (remember) store.set(TOKEN_KEY, token)
   else try { sessionStorage.setItem(TOKEN_KEY, token) } catch { /* ignore */ }
 }
@@ -96,43 +95,15 @@ export function asUrl(input: string) {
   return null
 }
 
-export function parseLinks(text: string): Link[] {
-  return text.split("\n").map((line) => {
-    const [a, b] = line.split("|").map((s) => s.trim())
-    return b ? { store: a, url: b } : a ? { store: host(a), url: a } : null
-  }).filter((l): l is Link => !!l && /^https?:\/\//.test(l.url))
-}
-
-// ---- search usage: this session's searches, kept in the tab (instant) ----
-export type SessionLog = { q: number; log: { name: string; q: number; at: number }[] }
-export function getSession(): SessionLog {
-  try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || "") || { q: 0, log: [] } } catch { return { q: 0, log: [] } }
-}
-export function logSearch(name: string, q?: number) {
-  const s = getSession()
-  s.q += q || 0
-  s.log.unshift({ name, q: q || 0, at: Date.now() })
-  s.log = s.log.slice(0, 200)
-  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(s)) } catch { /* ignore */ }
-}
-
-export type Usage = {
-  siteMonth?: { l: number; q: number }
-  freeMonthly?: number
-  searchOn?: boolean
-  account?: {
-    connected?: boolean; error?: string; searches?: number; unit?: string
-    searchCost?: number; geminiCost?: number; currency?: string; asOf?: string; checkedAt?: string
-  }
-}
-
-export const fmt = (n?: number) => Number(n || 0).toLocaleString()
-export const money = (n?: number, cur = "USD") =>
-  Number(n || 0).toLocaleString("en-US", { style: "currency", currency: cur, minimumFractionDigits: 2 })
-export const ago = (iso?: string) => {
-  if (!iso) return "unknown"
-  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
-  return m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`
+// The one link to show: the cheapest real store, ignoring search pages and prices so low
+// they're likely wrong (under half the priciest one). Ties keep the AI's best-first order.
+export function bestLink(gift: Gift): Link | null {
+  const links = (gift.links || []).filter((l) => !/amazon\.com\/s\?|google\.com\/search/.test(l.url))
+  const priced = links.filter((l) => priceNum(l.price || "") > 0)
+  const top = Math.max(0, ...priced.map((l) => priceNum(l.price!)))
+  const sane = priced.filter((l) => priceNum(l.price!) >= top / 2)
+  if (sane.length) return sane.reduce((a, b) => (priceNum(b.price!) < priceNum(a.price!) ? b : a))
+  return links[0] || (gift.sourceUrl ? { store: host(gift.sourceUrl), url: gift.sourceUrl } : null)
 }
 
 // "$24.99" -> "$25", "$1,299.50" -> "$1,300"; ranges and whole numbers are left alone.
