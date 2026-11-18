@@ -164,6 +164,32 @@ async function gemini(env, prompt, useSearch) {
   return out;
 }
 
+// Download a photo and ask Gemini whether it shows the item. Any failure counts as "no".
+async function photoShows(env, url, name) {
+  if (env.GEMINI_STUB === "1") return false;
+  try {
+    const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "image/*" }, redirect: "follow", signal: AbortSignal.timeout(8000) });
+    const type = (r.headers.get("content-type") || "").split(";")[0].trim();
+    if (!r.ok || !/^image\/(jpeg|png|webp|gif|avif)$/.test(type)) { console.log("photo skip", r.status, type, url); return false; }
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    if (bytes.length < 3000 || bytes.length > 4_000_000) { console.log("photo skip size", bytes.length, url); return false; }
+    let bin = ""; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    const g = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL || "gemini-3.5-flash-lite"}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
+      body: JSON.stringify({ contents: [{ parts: [
+        { text: `Is this a product photo of: ${name}? It must be this exact item (same model, color and material), not a similar one, and not a logo, banner or collage. Answer only yes or no.` },
+        { inline_data: { mime_type: type, data: btoa(bin) } },
+      ] }] }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const j = await g.json().catch(() => ({}));
+    const answer = (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("").trim().toLowerCase();
+    console.log("photo check", g.status, JSON.stringify(answer.slice(0, 20)), url);
+    return g.ok && answer.startsWith("yes");
+  } catch (e) { console.log("photo error", e.message, url); return false; }
+}
+
 // ---------- search budget ----------
 // Live search only works once billing is on; if Google refuses it, we retry in an hour.
 // DAILY_SEARCH_CAP (default 200) bounds how many searched lookups run per day (Pacific time).
@@ -273,7 +299,7 @@ Turn it into one specific, real, currently sold product that best matches.
 Every link must be a live, in-stock, direct product page for this exact model, never a homepage, category or search page. If the brand sells it on its own site, list that product page first.
 Reply with ONLY a JSON object:
 { ${FIELDS}
-  "image": "direct product image URL you found, or null",
+  "images": ["up to 3 direct image file URLs (.jpg/.png/.webp) showing this exact product, from listings you found: retailers, resale sites, the brand, press; best first"],
   "links": [{"store": "Store name", "url": "https://...", "price": "$.. or null"}],
   "searchQuery": "short brand + model search query" }
 2 to 3 links from different stores, best first. For collectibles or out-of-print items, include a marketplace that has it (TCGplayer, eBay, StockX). Only URLs you actually found.`
@@ -368,6 +394,13 @@ async function synthesize(input, forWhom, mode, env) {
   // Confirmed links first; ones we couldn't check (store blocks readers, or builds its page in the
   // browser) stay as backups. The page only shows a backup when nothing was confirmed.
   links.push(...good, ...maybe);
+
+  // Still no photo (stores block readers): try the AI's suggested photos, but only keep one that
+  // Gemini confirms, by looking at it, shows this item.
+  if (!image && ai) {
+    const urls = [...new Set([...(Array.isArray(ai.images) ? ai.images : []), ai.image].filter((u) => asUrl(String(u || ""))))].slice(0, 4);
+    for (const u of urls) { if (await photoShows(env, u, name)) { image = u; break; } }
+  }
 
   return {
     name,
