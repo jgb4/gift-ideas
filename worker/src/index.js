@@ -251,7 +251,7 @@ async function googleToken(sa) {
 }
 
 const FIELDS = `"name": "short clear product name",
-  "description": "one or two short sentences: what it is and why it's a nice gift",
+  "description": "a plain phrase of at most 10 words saying what it is (key spec if useful). No marketing, no 'perfect for', no brand repeat",
   "price": "estimated typical US price, e.g. \\"$49\\" or \\"$40–60\\"",`;
 
 function prompt(input, url, page, forWhom, withSearch) {
@@ -333,13 +333,10 @@ async function synthesize(input, forWhom, mode, env) {
       await tryPage(u, true);
     }
   }
-  const q = encodeURIComponent(ai?.searchQuery || name);
-  if (links.length < 3) add({ store: "Amazon", url: `https://www.amazon.com/s?k=${q}`, price: null });
-  if (links.length < 3) add({ store: "Google Shopping", url: `https://www.google.com/search?tbm=shop&q=${q}`, price: null });
 
   return {
     name,
-    description: String(ai?.description || page?.description || "").slice(0, 400),
+    description: String(ai?.description || page?.description || "").slice(0, 120),
     price: String(page?.price || links.find((l) => l.price)?.price || ai?.price || ""),
     image,
     links: links.slice(0, 3),

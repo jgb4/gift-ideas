@@ -40,21 +40,24 @@ export function GiftRow({ gift, onToggleBought, onFindStores, onEdit, onRemove }
     )
   }
 
-  const main = gift.sourceUrl || gift.links?.[0]?.url
+  // Search-result pages (Amazon/Google search) aren't real stores; hide them.
+  const links = (gift.links || []).filter((l) => !/amazon\.com\/s\?|google\.com\/search/.test(l.url))
+  const price = roundPrice(gift.price)
+  const main = gift.sourceUrl || links[0]?.url
   return (
     <li className={cn("flex items-start gap-3 py-3", gift.purchased && "opacity-50")}>
       {main ? <a href={main} target="_blank" rel="noopener"><Thumb gift={gift} /></a> : <Thumb gift={gift} />}
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-3">
           <p className={cn("min-w-0 flex-1 text-sm font-medium [overflow-wrap:anywhere]", gift.purchased && "line-through")}>{gift.name}</p>
-          {gift.price && <span className="shrink-0 text-sm tabular-nums">{roundPrice(gift.price)}</span>}
+          {price && <span className="shrink-0 text-sm tabular-nums">{price}</span>}
         </div>
-        {gift.description && <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{gift.description}</p>}
-        {!!gift.links?.length && (
+        {gift.description && <p className="mt-0.5 truncate text-sm text-muted-foreground">{gift.description}</p>}
+        {!!links.length && (
           <div className="mt-1 flex flex-wrap gap-x-3 text-xs">
-            {gift.links.map((l) => (
+            {links.map((l) => (
               <a key={l.url} href={l.url} target="_blank" rel="noopener" className="text-brand hover:underline">
-                {l.store || host(l.url)}{l.price && <span className="ml-1 text-muted-foreground">{roundPrice(l.price)}</span>}
+                {l.store || host(l.url)}{l.price && roundPrice(l.price) !== price && <span className="ml-1 text-muted-foreground">{roundPrice(l.price)}</span>}
               </a>
             ))}
           </div>
