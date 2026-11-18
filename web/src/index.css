@@ -134,3 +134,46 @@
     @apply font-sans;
     }
 }
+
+/* ---------- Holiday page themes (keyed on <body data-holiday>) ---------- */
+
+/* Hanukkah: always a light-blue theme (its page skips dark mode), with a faint
+   line-icon pattern of stars, dreidels and menorahs behind the content. */
+body[data-holiday="Hanukkah"] {
+    --background: oklch(0.91 0.065 240);
+    --foreground: oklch(0.24 0.06 255);
+    --card: oklch(0.975 0.02 240);
+    --card-foreground: oklch(0.24 0.06 255);
+    --popover: oklch(0.985 0.015 240);
+    --popover-foreground: oklch(0.24 0.06 255);
+    --primary: oklch(0.42 0.14 255);
+    --primary-foreground: oklch(0.985 0.01 240);
+    --secondary: oklch(0.87 0.08 240);
+    --secondary-foreground: oklch(0.3 0.08 255);
+    --muted: oklch(0.87 0.08 240);
+    --muted-foreground: oklch(0.45 0.07 252);
+    --accent: oklch(0.86 0.085 240);
+    --accent-foreground: oklch(0.3 0.08 255);
+    --border: oklch(0.8 0.085 240);
+    --input: oklch(0.78 0.09 240);
+    --ring: oklch(0.6 0.14 250);
+    --brand: oklch(0.48 0.18 256);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' fill='none' stroke='%233a6cc2' stroke-opacity='.2' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg transform='translate(52 56)'%3E%3Cpath d='M0-14 12.1 7H-12.1ZM0 14 12.1-7H-12.1Z'/%3E%3C/g%3E%3Cg transform='translate(190 66)'%3E%3Cpath d='M0-20V-12M-10-12H10V4L0 16-10 4Z'/%3E%3C/g%3E%3Cg transform='translate(116 196)'%3E%3Cpath d='M-24 0H24M-24 0V-8M-18 0V-8M-12 0V-8M-6 0V-8M0 0V-12M6 0V-8M12 0V-8M18 0V-8M24 0V-8M0 0V14M-9 14H9'/%3E%3C/g%3E%3Cg transform='translate(226 214) scale(.55)'%3E%3Cpath d='M0-14 12.1 7H-12.1ZM0 14 12.1-7H-12.1Z'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 260px 260px;
+    background-attachment: fixed;
+}
+
+/* Birthdays: keeps the normal (black in dark mode) theme, framed by a thin
+   multicolor border around the window. */
+body[data-holiday="Birthdays"]::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    pointer-events: none;
+    padding: 4px;
+    background: conic-gradient(from 210deg, #ff5c9d, #ffad3b, #ffe066, #3fe0b5, #4f9dff, #a67bff, #ff5c9d);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
