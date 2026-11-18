@@ -5,7 +5,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Skeleton } from "@/components/ui/skeleton"
-import { bestLink, host, roundPrice, type Gift } from "@/lib/gifts"
+import { bestLink, giftImage, host, roundPrice, type Gift } from "@/lib/gifts"
 import { cn } from "@/lib/utils"
 
 type Props = {
@@ -17,12 +17,12 @@ type Props = {
 
 function Thumb({ gift }: { gift: Gift }) {
   const [failed, setFailed] = useState<string | null>(null)
-  const showImage = gift.image && failed !== gift.image
+  const src = giftImage(gift)
   return (
     <div className="size-16 shrink-0 overflow-hidden rounded-md border bg-white">
-      {showImage && (
-        <img src={gift.image!} alt="" loading="lazy" referrerPolicy="no-referrer" className="size-full object-contain"
-          onError={() => setFailed(gift.image)} />
+      {src && failed !== src && (
+        <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" className="size-full object-contain"
+          onError={() => setFailed(src)} />
       )}
     </div>
   )

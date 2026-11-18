@@ -95,6 +95,17 @@ export function asUrl(input: string) {
   return null
 }
 
+// A photo for the gift: the saved one, or one built from a store link whose photos live at a
+// predictable address (TCGplayer pages are empty to the server, but their image CDN isn't).
+export function giftImage(gift: Gift): string | null {
+  if (gift.image) return gift.image
+  for (const l of gift.links || []) {
+    const tcg = l.url.match(/tcgplayer\.com\/product\/(\d+)/)
+    if (tcg) return `https://tcgplayer-cdn.tcgplayer.com/product/${tcg[1]}_in_1000x1000.jpg`
+  }
+  return null
+}
+
 // The one link to show. If the server confirmed some links (page opens, same item, in stock),
 // pick the cheapest of those, ignoring prices under half the priciest (likely wrong). Otherwise
 // take the AI's first pick: the cheapest unchecked link is often an official store that's sold out.

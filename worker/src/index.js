@@ -357,11 +357,13 @@ async function synthesize(input, forWhom, mode, env) {
     const v = judgeLink(p, name);
     if (v === "drop") return null;
     if (v === "verified") return { store: c.store, url: p.finalUrl, price: p.price || c.price, verified: true, image: sameItem(name, p.name, 0.8) ? p.image : null };
-    return { ...c, url: p?.ok ? p.finalUrl : c.url, price: p?.price || c.price, verified: false };
+    // Not confirmable as a product page, but if the page plainly names this item, its photo is fine.
+    const photo = p?.ok && p.image && sameItem(name, p.name, 0.8) ? p.image : null;
+    return { ...c, url: p?.ok ? p.finalUrl : c.url, price: p?.price || c.price, verified: false, image: photo };
   }));
   const good = checked.filter((c) => c?.verified);
   const maybe = checked.filter((c) => c && !c.verified);
-  for (const c of good) { if (!image && c.image) image = c.image; delete c.image; }
+  for (const c of [...good, ...maybe]) { if (!image && c.image) image = c.image; delete c.image; }
   if (links[0]) links[0].verified = pageIsGood && !page.soldOut;
   // Confirmed links first; ones we couldn't check (store blocks readers, or builds its page in the
   // browser) stay as backups. The page only shows a backup when nothing was confirmed.
