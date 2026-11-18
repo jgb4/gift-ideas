@@ -140,7 +140,7 @@
 /* Hanukkah: always a light-blue theme (its page skips dark mode), with a faint
    line-icon pattern of stars, dreidels and menorahs behind the content. */
 body[data-holiday="Hanukkah"] {
-    --background: #79C4FC;
+    --background: #A1D5FF;
     --foreground: oklch(0.24 0.06 255);
     --card: oklch(0.975 0.02 240);
     --card-foreground: oklch(0.24 0.06 255);
@@ -151,11 +151,11 @@ body[data-holiday="Hanukkah"] {
     --secondary: oklch(0.87 0.08 240);
     --secondary-foreground: oklch(0.3 0.08 255);
     --muted: oklch(0.87 0.08 240);
-    --muted-foreground: oklch(0.36 0.08 252);
+    --muted-foreground: oklch(0.4 0.08 252);
     --accent: oklch(0.86 0.085 240);
     --accent-foreground: oklch(0.3 0.08 255);
-    --border: oklch(0.68 0.1 242);
-    --input: oklch(0.66 0.1 242);
+    --border: oklch(0.74 0.09 242);
+    --input: oklch(0.72 0.09 242);
     --ring: oklch(0.6 0.14 250);
     --brand: oklch(0.48 0.18 256);
 }
