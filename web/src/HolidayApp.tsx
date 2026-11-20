@@ -2,11 +2,11 @@ import { useEffect, useReducer, useRef, useState } from "react"
 import { EditGiftDialog } from "@/components/EditGiftDialog"
 import { GiftRow } from "@/components/GiftRow"
 import { Login } from "@/components/Login"
+import { PersonTabs } from "@/components/PersonTabs"
 import { AddPersonDialog, ConfirmDialog, type Confirm } from "@/components/SmallDialogs"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   SignedOut, api, asUrl, getToken, newCategory, rid,
   sameName, setSignedOutHandler, store, type DB, type Gift,
@@ -163,11 +163,10 @@ function Lists({ holiday }: { holiday: string }) {
       {shell(<>
         <div className="mt-4 flex items-center gap-1 overflow-x-auto overflow-y-hidden border-b [scrollbar-width:none]">
           {c.profiles.length > 0 && (
-            <Tabs value={prof?.id} onValueChange={selectProf}>
-              <TabsList variant="line">
-                {c.profiles.map((p) => <TabsTrigger key={p.id} value={p.id}>{p.name}</TabsTrigger>)}
-              </TabsList>
-            </Tabs>
+            <PersonTabs profiles={c.profiles} value={prof?.id} onSelect={selectProf}
+              onReorder={(ids) => change(() => {
+                c.profiles = ids.map((id) => c.profiles.find((p) => p.id === id)!).filter(Boolean)
+              })} />
           )}
           <Button variant="ghost" size="icon-sm" aria-label="Add person" className="mb-1 shrink-0 text-muted-foreground"
             onClick={() => setAddingPerson(true)}><Plus /></Button>
