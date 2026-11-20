@@ -9,7 +9,7 @@ type Press = {
 }
 
 // The person tabs. Drag one to reorder (mouse: just drag; touch: press and hold, then drag;
-// keyboard: Alt + arrow keys). "Me" gets a thin outline.
+// keyboard: Alt + arrow keys). "Me" gets a small dot.
 export function PersonTabs({ profiles, value, onSelect, onReorder }: {
   profiles: Profile[]
   value?: string
@@ -115,11 +115,11 @@ export function PersonTabs({ profiles, value, onSelect, onReorder }: {
               onKeyDown={onKeyDown(id)} onContextMenu={(e) => press.current?.touch && e.preventDefault()}
               aria-roledescription="draggable tab"
               className={cn(
-                "select-none [-webkit-touch-callout:none]",
-                p.special && "border-border! dark:border-input!",
-                dragId === id && "cursor-grabbing bg-muted! text-foreground",
+                "select-none [-webkit-touch-callout:none] focus-visible:border-transparent focus-visible:text-foreground focus-visible:ring-0 focus-visible:outline-none",
+                dragId === id && "cursor-grabbing opacity-50",
               )}>
               {p.name}
+              {p.special && <span aria-hidden className="size-1 rounded-full bg-foreground/40" />}
             </TabsTrigger>
           )
         })}
