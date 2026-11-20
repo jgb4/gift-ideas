@@ -1,6 +1,6 @@
 // Data model, API client and small helpers shared by the pages.
 
-export type Link = { store: string; url: string; price?: string | null; verified?: boolean; official?: boolean }
+export type Link = { store: string; url: string; price?: string | null; verified?: boolean; official?: boolean; search?: boolean }
 export type Gift = {
   id: string
   sourceUrl: string | null
@@ -122,7 +122,8 @@ export function bestLink(gift: Gift): Link | null {
   const top = Math.max(0, ...priced.map((l) => priceNum(l.price!)))
   const sane = priced.filter((l) => priceNum(l.price!) >= top / 2)
   if (sane.length) return sane.reduce((a, b) => (priceNum(b.price!) < priceNum(a.price!) ? b : a))
-  return ok[0] || links[0] || (gift.sourceUrl ? { store: host(gift.sourceUrl), url: gift.sourceUrl } : null)
+  // Last resort: the Google Shopping search the server adds when every store page was dead.
+  return ok[0] || links[0] || (gift.sourceUrl ? { store: host(gift.sourceUrl), url: gift.sourceUrl } : null) || gift.links?.[0] || null
 }
 
 // One rounded price: "$24.99" -> "$25", "$1,299.50" -> "$1,300", a range "$40–60" -> "$40".

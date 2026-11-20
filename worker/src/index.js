@@ -415,6 +415,7 @@ async function synthesize(input, forWhom, mode, env) {
   if (usedSearch) {
     const aiLinks = Array.isArray(ai?.links) ? ai.links : [];
     const real = await Promise.all(aiLinks.map((l) => unredirect(String(l?.url || ""))));
+    console.log("ai links", JSON.stringify(aiLinks.map((l, i) => [l?.url, real[i]])));
     aiLinks.forEach((l, i) => { if (real[i]) push(real[i], l?.store, l?.price, l?.official); });
   }
   else for (const u of Array.isArray(ai?.productUrls) ? ai.productUrls : []) push(u);
@@ -424,6 +425,7 @@ async function synthesize(input, forWhom, mode, env) {
     let p = null;
     try { p = await readPage(c.url); } catch { /* timeout: can't tell */ }
     const v = judgeLink(p, name);
+    console.log("link", c.url, p ? `${p.status} product=${p.isProduct} name=${JSON.stringify(p.name)}` : "unreadable", "->", v);
     if (v === "drop") return null;
     if (v === "verified") return { store: c.store, official: c.official, url: p.finalUrl, price: onePrice(p.price || c.price) || null, verified: true, image: sameItem(name, p.name, 0.8) ? p.image : null };
     // Couldn't confirm the page, but its main photo is still worth showing Gemini.
@@ -438,6 +440,8 @@ async function synthesize(input, forWhom, mode, env) {
   // Confirmed links first; ones we couldn't check (store blocks readers, or builds its page in the
   // browser) stay as backups. The page only shows a backup when nothing was confirmed.
   links.push(...good, ...maybe);
+  // Every store page turned out dead (the AI sometimes guesses product addresses): link a Google Shopping search instead of nothing.
+  if (!links.length) links.push({ store: "Google Shopping", url: "https://www.google.com/search?tbm=shop&q=" + encodeURIComponent(name), price: null, verified: false, search: true });
 
   // Still no photo: try photos from the listings we could read, then the AI's suggestions, and
   // keep the first one Gemini confirms (by looking at it) shows this item.
