@@ -78,6 +78,9 @@ export function newCategory(name: string): Category {
 
 export const sameName = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
 
+// Your own list: the built-in "Me", or a person you added and named "Me".
+export const isMe = (p: { name: string; special: boolean }) => p.special || sameName(p.name.trim(), "me")
+
 export function priceNum(p: string) {
   const m = String(p || "").replace(/,/g, "").match(/\d+(\.\d+)?/g)
   if (!m) return 0

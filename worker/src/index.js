@@ -32,7 +32,11 @@ export default {
       if (!(await authed(req, env))) return json({ error: "Not signed in" }, 401);
 
       if (path === "/api/usage" && req.method === "GET") return json(await usageReport(env));
-      if (path === "/api/data" && req.method === "GET") return json((await env.GIFTS.get("db", "json")) || null);
+      if (path === "/api/data" && req.method === "GET") {
+        const db = await env.GIFTS.get("db", "json");
+        if (db && (await fixSavedRedirects(db))) await env.GIFTS.put("db", JSON.stringify(db));
+        return json(db || null);
+      }
       if (path === "/api/data" && req.method === "PUT") {
         const body = await req.text();
         if (body.length > 5_000_000) return json({ error: "Too large" }, 413);
@@ -89,6 +93,35 @@ async function authed(req, env) {
 // ---------- page reading (free, no AI) ----------
 const decode = (s = "") => s.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ").trim();
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return "Store"; } };
+
+// Gemini's search sometimes hands back Google's own redirect links (vertexaisearch.cloud.google.com/grounding-api-redirect/...)
+// instead of the store's address. They expire, so follow them once to the real page; null if that fails.
+const isRedirect = (u) => /(^|\.)vertexaisearch\.cloud\.google\.com$/i.test(host(u));
+async function unredirect(u) {
+  if (!isRedirect(u)) return u;
+  try {
+    const r = await fetch(u, { redirect: "manual", headers: { "User-Agent": UA }, signal: AbortSignal.timeout(6000) });
+    const to = r.headers.get("location");
+    const real = to ? new URL(to, u).href : null;
+    return real && /^https?:/.test(real) && !isRedirect(real) ? real : null;
+  } catch { return null; }
+}
+
+// Fix redirect links already saved in the lists: swap in the real address, or drop the link if it no longer resolves.
+async function fixSavedRedirects(db) {
+  const all = [];
+  for (const c of db?.categories || []) for (const p of c.profiles || []) for (const g of p.items || []) {
+    for (const l of g.links || []) if (l?.url && isRedirect(l.url)) all.push(l);
+  }
+  if (!all.length) return false;
+  await Promise.all(all.map(async (l) => {
+    const real = await unredirect(l.url);
+    if (real) { if (!l.store || isRedirect("https://" + l.store) || /vertexaisearch/i.test(l.store)) l.store = host(real); l.url = real; }
+    else l.url = null;
+  }));
+  for (const c of db.categories) for (const p of c.profiles || []) for (const g of p.items || []) if (g.links) g.links = g.links.filter((l) => l?.url);
+  return true;
+}
 
 async function readPage(url) {
   const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "text/html,*/*", "Accept-Language": "en-US,en" }, redirect: "follow", signal: AbortSignal.timeout(12000) });
@@ -379,7 +412,11 @@ async function synthesize(input, forWhom, mode, env) {
     try { if (new URL(u).pathname.replace(/\/+$/, "") === "") return; } catch { return; }
     seen.add(host(u)); candidates.push({ url: u, store: store || host(u), price: price || null, official: official === true });
   };
-  if (usedSearch) for (const l of Array.isArray(ai?.links) ? ai.links : []) push(l?.url, l?.store, l?.price, l?.official);
+  if (usedSearch) {
+    const aiLinks = Array.isArray(ai?.links) ? ai.links : [];
+    const real = await Promise.all(aiLinks.map((l) => unredirect(String(l?.url || ""))));
+    aiLinks.forEach((l, i) => { if (real[i]) push(real[i], l?.store, l?.price, l?.official); });
+  }
   else for (const u of Array.isArray(ai?.productUrls) ? ai.productUrls : []) push(u);
 
   const checked = await Promise.all(candidates.map(async (c) => {

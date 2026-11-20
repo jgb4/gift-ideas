@@ -8,7 +8,7 @@ import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
-  SignedOut, api, asUrl, getToken, newCategory, rid,
+  SignedOut, api, asUrl, getToken, isMe, newCategory, rid,
   sameName, setSignedOutHandler, store, type DB, type Gift,
 } from "@/lib/gifts"
 
@@ -86,7 +86,7 @@ function Lists({ holiday }: { holiday: string }) {
         let next: { p: { name: string; special: boolean }; g: Gift } | null = null
         for (const p of c?.profiles || []) for (const g of p.items) if (!next && g.status === "processing") next = { p, g }
         if (!next) break
-        const who = next.p.special ? "me (my own wishlist)" : `${next.p.name} (${holiday})`
+        const who = isMe(next.p) ? "me (my own wishlist)" : `${next.p.name} (${holiday})`
         let result: Partial<Gift> & { error?: string | null }
         try {
           result = await api("/api/synthesize", {
@@ -212,7 +212,7 @@ function Lists({ holiday }: { holiday: string }) {
       <ConfirmDialog confirm={confirm} onClose={() => setConfirm(null)} />
       <AddPersonDialog open={addingPerson} onClose={() => setAddingPerson(false)}
         onAdd={(name) => {
-          const p = { id: rid(), name, special: false, items: [] }
+          const p = { id: rid(), name, special: sameName(name, "me"), items: [] }
           change(() => c.profiles.push(p)); selectProf(p.id); setAddingPerson(false)
         }} />
     </>

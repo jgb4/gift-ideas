@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { cn } from "cn"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { Profile } from "@/lib/gifts"
+import { isMe, type Profile } from "@/lib/gifts"
 
 type Press = {
   id: string; pointerId: number; x: number; y: number
@@ -119,7 +119,7 @@ export function PersonTabs({ profiles, value, onSelect, onReorder }: {
                 dragId === id && "cursor-grabbing opacity-50",
               )}>
               {p.name}
-              {p.special && <span aria-hidden className="size-1 rounded-full bg-foreground/40" />}
+              {isMe(p) && <span aria-hidden className="size-1 rounded-full bg-foreground/40" />}
             </TabsTrigger>
           )
         })}
