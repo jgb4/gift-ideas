@@ -161,7 +161,7 @@ function Lists({ holiday }: { holiday: string }) {
   return (
     <>
       {shell(<>
-        <div className="mt-4 flex items-center gap-1 overflow-x-auto overflow-y-hidden border-b [scrollbar-width:none]">
+        <div className="mt-4 flex items-center gap-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none]">
           {c.profiles.length > 0 && (
             <PersonTabs profiles={c.profiles} value={prof?.id} onSelect={selectProf}
               onReorder={(ids) => change(() => {
