@@ -437,10 +437,12 @@ async function synthesize(input, forWhom, mode, env) {
   const pagePhotos = maybe.map((c) => c.photo).filter(Boolean);
   for (const c of maybe) delete c.photo;
   if (links[0]) links[0].verified = pageIsGood && !page.soldOut;
-  // Confirmed links first; ones we couldn't check (store blocks readers, or builds its page in the
-  // browser) stay as backups. The page only shows a backup when nothing was confirmed.
-  links.push(...good, ...maybe);
-  // Every store page turned out dead (the AI sometimes guesses product addresses): link a Google Shopping search instead of nothing.
+  // Keep only links we confirmed. Pages we couldn't read (stores that block readers, pages built in the
+  // browser) are dropped: the AI sometimes makes up product addresses, and those would look fine here.
+  // Their photos were still collected above.
+  console.log("dropped unchecked", JSON.stringify(maybe.map((c) => c.url)));
+  links.push(...good);
+  // Nothing confirmed: link a Google Shopping search instead of a link that may be dead.
   if (!links.length) links.push({ store: "Google Shopping", url: "https://www.google.com/search?tbm=shop&q=" + encodeURIComponent(name), price: null, verified: false, search: true });
 
   // Still no photo: try photos from the listings we could read, then the AI's suggestions, and
