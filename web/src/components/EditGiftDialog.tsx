@@ -39,7 +39,7 @@ export function EditGiftDialog({ gift, onClose, onRerun, onSave }: Props) {
           <Label htmlFor="e-request">Link or description</Label>
           <Textarea id="e-request" rows={2} value={f.request} onChange={set("request")} placeholder="A link or a description" />
           <Button variant="secondary" size="sm" disabled={!f.request.trim()} onClick={() => onRerun(f.request.trim())}>
-            Redo with AI
+            Regenerate
           </Button>
         </div>
 
